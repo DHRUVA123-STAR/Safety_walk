@@ -1,0 +1,5 @@
+﻿Flask>=3.0,<4.0
+gunicorn>=21.2,<22.0
+opencv-python-headless>=4.9,<5.0
+numpy>=1.26,<3.0
+certifi>=2024.0.0
