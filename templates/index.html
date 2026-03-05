@@ -1,0 +1,1837 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Community Safety Walk Audit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <!-- PWA + mobile meta -->
+    <meta name="theme-color" content="#1966d2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        :root{
+            --primary:#1966d2;
+            --accent:#0ea5a4;
+            --text:#111827;
+            --muted:#4b5563;
+            --surface:rgba(255,255,255,0.95);
+            --panel:rgba(15,23,42,0.72);
+            --panel-border:rgba(255,255,255,0.2);
+        }
+
+        *{
+            box-sizing:border-box;
+            font-family:'Roboto',sans-serif;
+        }
+
+        body{
+            margin:0;
+            background:linear-gradient(135deg,#4e73df,#1cc88a);
+            transition:0.4s ease;
+        }
+
+        .dark-mode{
+            background:linear-gradient(135deg,#0f172a,#1e293b);
+            color:#f1f5f9;
+        }
+
+        .container{
+            width:min(1200px,95%);
+            margin:60px auto;
+            background:var(--surface);
+            backdrop-filter:blur(18px);
+            padding:35px;
+            border-radius:22px;
+            box-shadow:0 25px 60px rgba(0,0,0,0.15);
+            transition:0.4s ease;
+            animation:fadeUp 0.7s ease;
+        }
+
+        .dark-mode .container{
+            background:rgba(30,41,59,0.95);
+        }
+
+        .header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:25px;
+        }
+
+        .content-grid{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:20px;
+            align-items:start;
+        }
+
+        .left-stack,
+        .right-stack{
+            display:flex;
+            flex-direction:column;
+            gap:16px;
+        }
+
+        .panel{
+            background:rgba(255,255,255,0.72);
+            border:1px solid rgba(15,23,42,0.08);
+            border-radius:16px;
+            padding:16px;
+        }
+
+        .dark-mode .panel{
+            background:rgba(15,23,42,0.55);
+            border-color:rgba(255,255,255,0.12);
+        }
+
+        .header h2{
+            margin:0;
+            font-weight:700;
+            font-size:24px;
+            letter-spacing:0.3px;
+        }
+
+        .icons{
+            display:flex;
+            gap:12px;
+            align-items:center;
+        }
+
+        .icon-btn{
+            width:42px;
+            height:42px;
+            border-radius:14px;
+            border:none;
+            cursor:pointer;
+            background:linear-gradient(135deg,var(--primary),var(--accent));
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            transition:0.25s ease;
+        }
+
+        .icon-btn svg{
+            width:20px;
+            height:20px;
+            stroke:white;
+            stroke-width:2;
+            fill:none;
+            stroke-linecap:round;
+            stroke-linejoin:round;
+        }
+
+        .icon-btn:hover{
+            transform:translateY(-4px);
+            box-shadow:0 12px 25px rgba(0,0,0,0.2);
+        }
+
+        .theme-btn{
+            width:42px;
+            height:42px;
+            border:none;
+            border-radius:14px;
+            cursor:pointer;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:linear-gradient(135deg,#f59e0b,#f97316);
+            transition:transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .theme-btn:hover{
+            transform:translateY(-3px);
+            box-shadow:0 12px 20px rgba(249,115,22,0.35);
+        }
+
+        .theme-btn svg{
+            width:20px;
+            height:20px;
+            stroke:#fff;
+            stroke-width:2;
+            fill:none;
+            stroke-linecap:round;
+            stroke-linejoin:round;
+        }
+
+        .moon-icon{
+            display:none;
+        }
+
+        .dark-mode .theme-btn{
+            background:linear-gradient(135deg,#334155,#0f172a);
+        }
+
+        .dark-mode .sun-icon{
+            display:none;
+        }
+
+        .dark-mode .moon-icon{
+            display:block;
+        }
+
+        /* ==================== FIXED LANGUAGE SWITCH – visible in light & dark ==================== */
+        .lang-switch{
+            display:flex;
+            background:rgba(255,255,255,0.9);
+            border:1px solid #cbd5e1;
+            border-radius:50px;
+            padding:4px;
+            gap:4px;
+            box-shadow:0 4px 15px rgba(0,0,0,0.12);
+        }
+
+        .dark-mode .lang-switch{
+            background:rgba(15,23,42,0.6);
+            border:1px solid rgba(255,255,255,0.18);
+        }
+
+        .lang-btn{
+            padding:7px 16px;
+            border:none;
+            border-radius:50px;
+            font-weight:700;
+            font-size:13px;
+            cursor:pointer;
+            transition:all 0.25s ease;
+            background:transparent;
+            color:#111827;
+            min-width:42px;
+            text-align:center;
+        }
+
+        .lang-btn.active{
+            background:var(--primary);
+            color:white;
+            box-shadow:0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .dark-mode .lang-btn{
+            color:#f1f5f9;
+        }
+
+        .dark-mode .lang-btn.active{
+            background:#60a5fa;
+            color:#0f172a;
+        }
+        /* ==================================================================================== */
+
+        label{
+            font-size:14px;
+            font-weight:500;
+            margin-bottom:5px;
+            display:block;
+        }
+
+        select{
+            width:100%;
+            padding:10px;
+            border-radius:12px;
+            border:1px solid #e5e7eb;
+            margin-bottom:15px;
+            font-size:15px;
+            transition:0.2s;
+        }
+
+        select:focus{
+            outline:none;
+            border-color:var(--primary);
+            box-shadow:0 0 0 3px rgba(78,115,223,0.2);
+        }
+
+        .check-btn{
+            width:100%;
+            padding:12px;
+            border-radius:14px;
+            border:none;
+            background:linear-gradient(135deg,var(--primary),var(--accent));
+            color:white;
+            font-weight:600;
+            font-size:17px;
+            cursor:pointer;
+            transition:0.25s;
+        }
+
+        .check-btn:hover{
+            transform:translateY(-3px);
+            box-shadow:0 15px 30px rgba(0,0,0,0.2);
+        }
+
+        .result{
+            margin-top:0;
+            padding:18px;
+            border-radius:16px;
+            background:rgba(0,0,0,0.04);
+            animation:fadeIn 0.6s ease;
+        }
+
+        .dark-mode .result{
+            background:rgba(255,255,255,0.05);
+        }
+
+        .score-number{
+            font-size:36px;
+            font-weight:700;
+            margin:5px 0;
+        }
+
+        .result h3{
+            margin:0;
+        }
+
+        ul{
+            padding-left:18px;
+            font-size:14px;
+        }
+
+        #map{
+            height:250px;
+            border-radius:16px;
+            overflow:hidden;
+        }
+
+        .camera-panel{
+            background:var(--panel);
+            border:1px solid var(--panel-border);
+            border-radius:18px;
+            padding:16px;
+            color:#e5edf7;
+            transform:translateY(0);
+            transition:transform 0.35s ease, box-shadow 0.35s ease;
+        }
+
+        .camera-panel:hover{
+            transform:translateY(-2px);
+            box-shadow:0 16px 30px rgba(0,0,0,0.25);
+        }
+
+        .camera-title{
+            margin:0;
+            font-size:20px;
+            letter-spacing:0.2px;
+        }
+
+        .camera-subtitle{
+            margin:6px 0 14px;
+            color:#c8d6e8;
+            font-size:14px;
+        }
+
+        video{
+            width:100%;
+            border-radius:14px;
+            margin-top:6px;
+            border:1px solid rgba(255,255,255,0.2);
+            transition:opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        #video{
+            display:none;
+            opacity:0;
+            transform:translateY(8px);
+        }
+
+        .camera-panel.live #video{
+            opacity:1;
+            transform:translateY(0);
+        }
+
+        #analyzeBtn{
+            display:none;
+            width:100%;
+            margin-top:12px;
+            border:none;
+            border-radius:12px;
+            padding:11px 14px;
+            font-size:15px;
+            font-weight:700;
+            letter-spacing:0.1px;
+            background:linear-gradient(135deg,#22c55e,#14b8a6);
+            color:white;
+            cursor:pointer;
+            transition:transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        #analyzeBtn:hover{
+            transform:translateY(-2px);
+            box-shadow:0 12px 20px rgba(20,184,166,0.35);
+        }
+
+        .camera-functions{
+            margin-top:16px;
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:10px;
+        }
+
+        .function-card{
+            background:rgba(255,255,255,0.08);
+            border:1px solid rgba(255,255,255,0.15);
+            border-radius:12px;
+            padding:10px;
+            animation:fadeIn 0.55s ease;
+            transition:transform 0.28s ease, background 0.28s ease;
+            cursor:pointer;
+            text-align:left;
+            color:inherit;
+            width:100%;
+        }
+
+        .function-card:hover{
+            transform:translateY(-3px);
+            background:rgba(255,255,255,0.14);
+        }
+
+        .function-card.active{
+            background:rgba(14,165,164,0.25);
+            border-color:rgba(45,212,191,0.5);
+            box-shadow:0 8px 20px rgba(14,165,164,0.2);
+        }
+
+        .function-title{
+            margin:0 0 4px;
+            font-size:15px;
+            font-weight:700;
+            color:#f8fafc;
+        }
+
+        .function-text{
+            margin:0;
+            font-size:14px;
+            color:#dbe6f3;
+            line-height:1.45;
+        }
+
+        .camera-status{
+            margin-top:12px;
+            padding:10px 12px;
+            border-radius:10px;
+            font-size:14px;
+            line-height:1.4;
+            border:1px solid rgba(255,255,255,0.2);
+            color:#e2e8f0;
+            background:rgba(255,255,255,0.06);
+            min-height:38px;
+            display:flex;
+            align-items:center;
+            transition:all 0.25s ease;
+        }
+
+        .camera-status.success{
+            border-color:rgba(52,211,153,0.55);
+            background:rgba(16,185,129,0.17);
+            color:#d1fae5;
+        }
+
+        .camera-status.error{
+            border-color:rgba(248,113,113,0.5);
+            background:rgba(220,38,38,0.2);
+            color:#fee2e2;
+        }
+
+        .community-panel h3{
+            margin:0 0 10px;
+            font-size:18px;
+        }
+
+        .community-grid{
+            display:grid;
+            grid-template-columns:1fr;
+            gap:10px;
+        }
+
+        .community-file{
+            width:100%;
+            padding:8px;
+            border:1px solid #d1d5db;
+            border-radius:10px;
+            background:#fff;
+        }
+
+        .dark-mode .community-file{
+            background:#0f172a;
+            color:#e2e8f0;
+            border-color:#475569;
+        }
+
+        .community-note{
+            width:100%;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            padding:10px;
+            font-size:14px;
+            resize:vertical;
+            min-height:72px;
+        }
+
+        .community-post-btn{
+            width:100%;
+            border:none;
+            border-radius:12px;
+            padding:10px 12px;
+            background:linear-gradient(135deg,#2563eb,#0ea5a4);
+            color:white;
+            font-size:14px;
+            font-weight:700;
+            cursor:pointer;
+        }
+
+        .community-post-btn:hover{
+            transform:translateY(-1px);
+        }
+
+        .feed-list{
+            margin-top:10px;
+            display:flex;
+            flex-direction:column;
+            gap:10px;
+            max-height:360px;
+            overflow:auto;
+        }
+
+        .feed-item{
+            border:1px solid rgba(15,23,42,0.12);
+            border-radius:12px;
+            padding:10px;
+            background:rgba(255,255,255,0.82);
+        }
+
+        .dark-mode .feed-item{
+            background:rgba(15,23,42,0.5);
+            border-color:rgba(255,255,255,0.14);
+        }
+
+        .feed-img{
+            width:100%;
+            border-radius:10px;
+            max-height:180px;
+            object-fit:cover;
+            margin-top:8px;
+        }
+
+        .reaction-row{
+            display:flex;
+            gap:6px;
+            margin-top:8px;
+            flex-wrap:wrap;
+        }
+
+        .reaction-btn{
+            border:1px solid #cbd5e1;
+            border-radius:999px;
+            background:white;
+            padding:6px 10px;
+            font-size:12px;
+            cursor:pointer;
+        }
+
+        .community-status{
+            margin-top:8px;
+            font-size:13px;
+            color:#0f766e;
+        }
+
+        .community-meta{
+            font-size:12px;
+            color:#64748b;
+            margin-top:4px;
+        }
+
+        @media (max-width:980px){
+            .content-grid{
+                grid-template-columns:1fr;
+            }
+        }
+
+        @media (max-width:640px){
+            .camera-functions{
+                grid-template-columns:1fr;
+            }
+            .header{
+                flex-direction:column;
+                align-items:flex-start;
+                gap:12px;
+            }
+            .icons{
+                width:100%;
+                flex-wrap:wrap;
+                justify-content:flex-start;
+                row-gap:8px;
+            }
+            .lang-switch{
+                max-width:100%;
+                overflow-x:auto;
+                -webkit-overflow-scrolling:touch;
+            }
+            .lang-switch{
+                padding:3px;
+                gap:2px;
+            }
+            .lang-btn{
+                padding:6px 12px;
+                font-size:12px;
+            }
+        }
+
+        @keyframes fadeIn{
+            from{opacity:0; transform:translateY(10px);}
+            to{opacity:1; transform:translateY(0);}
+        }
+
+        @keyframes fadeUp{
+            from{opacity:0; transform:translateY(14px);}
+            to{opacity:1; transform:translateY(0);}
+        }
+
+        /* ────────────────────────────────────────────────
+           Added mobile + touch + feedback styles
+        ───────────────────────────────────────────────── */
+        @media (hover: none) and (pointer: coarse) {
+            .icon-btn, .check-btn, .community-post-btn, .reaction-btn, .community-upload-btn, .helpful-btn {
+                min-height: 48px;
+                padding: 12px 16px;
+                font-size: 16px;
+                touch-action: manipulation;
+            }
+            .function-card { min-height: 88px; }
+        }
+
+        @media (max-width: 640px) {
+            body { overflow-x: hidden; }
+            .container { width: min(100%, calc(100% - 20px)); margin: 12px auto; padding: 18px 12px; }
+            #map { height: 200px; }
+            .camera-functions { grid-template-columns: 1fr; gap: 12px; }
+            .lang-switch { justify-content: center; padding: 4px; }
+            * { animation-duration: 0.3s !important; transition-duration: 0.25s !important; }
+        }
+
+        .community-upload-btn {
+            width: 100%;
+            margin-bottom: 12px;
+            padding: 14px;
+            border: 2px dashed #0ea5a4;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            color: #0f766e;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .community-upload-btn:hover,
+        .community-upload-btn:active {
+            background: #0ea5a4;
+            color: white;
+            border-color: transparent;
+        }
+
+        .dark-mode .community-upload-btn {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            border-color: #0ea5a4;
+            color: #a5f3fc;
+        }
+
+        .dark-mode .community-upload-btn:hover,
+        .dark-mode .community-upload-btn:active {
+            background: #0ea5a4;
+            color: white;
+        }
+
+        input, select, textarea, button {
+            font-size: 16px;
+        }
+
+        img {
+            loading: lazy;
+        }
+
+        .helpful-row {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .helpful-btn {
+            border: 1px solid #cbd5e1;
+            border-radius: 999px;
+            padding: 5px 14px;
+            font-size: 13px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .helpful-btn.yes { color: #16a34a; }
+        .helpful-btn.no  { color: #dc2626; }
+
+        .helpful-btn:hover {
+            background: #f1f5f9;
+        }
+
+        .dark-mode .helpful-row {
+            color: #94a3b8;
+        }
+
+        .dark-mode .helpful-btn {
+            background: #1e293b;
+            border-color: #475569;
+            color: #e2e8f0;
+        }
+
+        .dark-mode .helpful-btn:hover {
+            background: #334155;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h2>Community Safety Walk Audit</h2>
+
+        <div class="icons">
+
+            <!-- Voice -->
+            <button class="icon-btn" type="button" title="Voice assistant" onclick="startVoice()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
+                    <path d="M19 11a7 7 0 0 1-14 0"/>
+                    <path d="M12 18v3"/>
+                    <path d="M9 21h6"/>
+                </svg>
+            </button>
+
+            <!-- Camera -->
+            <button class="icon-btn" onclick="openCamera()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M4 7h4l2-2h4l2 2h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>
+                    <circle cx="12" cy="13" r="3.5"/>
+                </svg>
+            </button>
+
+            <!-- Theme -->
+            <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">
+                <svg class="sun-icon" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2"></path>
+                    <path d="M12 20v2"></path>
+                    <path d="M4.93 4.93l1.41 1.41"></path>
+                    <path d="M17.66 17.66l1.41 1.41"></path>
+                    <path d="M2 12h2"></path>
+                    <path d="M20 12h2"></path>
+                    <path d="M4.93 19.07l1.41-1.41"></path>
+                    <path d="M17.66 6.34l1.41-1.41"></path>
+                </svg>
+                <svg class="moon-icon" viewBox="0 0 24 24">
+                    <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"></path>
+                </svg>
+            </button>
+
+            <!-- ==================== LANGUAGE SWITCH ==================== -->
+            <div class="lang-switch" id="langSwitch">
+                <button class="lang-btn active" id="lang-en" onclick="switchLanguage('en')">EN</button>
+                <button class="lang-btn" id="lang-te" onclick="switchLanguage('te')">తె</button>
+                <button class="lang-btn" id="lang-hi" onclick="switchLanguage('hi')">हि</button>
+            </div>
+            
+            <!-- Feedback button -->
+            <button class="icon-btn" title="Send feedback" onclick="showFeedbackModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+            </button>
+
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <div class="left-stack">
+            <div class="panel">
+                <form method="POST" id="safetyForm">
+                    <input type="hidden" name="voice_trigger" id="voiceTrigger" value="false">
+                    <input type="hidden" name="vehicle_count" id="vehicleCount" value="0">
+
+                    <label>Area Type</label>
+                    <select name="area" id="area">
+                        <option>Urban</option>
+                        <option>Rural</option>
+                    </select>
+
+                    <label>Lighting</label>
+                    <select name="lighting" id="lighting">
+                        <option>Good</option>
+                        <option>Poor</option>
+                    </select>
+
+                    <label>Traffic</label>
+                    <select name="traffic" id="traffic">
+                        <option>Low</option>
+                        <option>High</option>
+                    </select>
+
+                    <label>Crowd</label>
+                    <select name="crowd" id="crowd">
+                        <option>Less</option>
+                        <option>Dense</option>
+                    </select>
+
+                    <button type="submit" class="check-btn">Check Safety</button>
+                </form>
+            </div>
+
+            <div class="result panel" id="resultBox" {% if not score %}style="display:none;"{% endif %}>
+                <h3 id="resultLevel">{% if score %}Safety Level: {{ safety_level }}{% endif %}</h3>
+                <div class="score-number" id="animatedScore">{% if score %}Score: {{ score }}{% else %}Score: 0{% endif %}</div>
+                <ul id="reasonList">
+                    {% if reasons %}
+                        {% for reason in reasons %}
+                            <li>{{ reason }}</li>
+                        {% endfor %}
+                    {% endif %}
+                </ul>
+            </div>
+
+            <div class="panel community-panel">
+                <h3>Community Hazard Share</h3>
+                <div class="community-grid">
+                    <button type="button" class="community-upload-btn" 
+                            onclick="document.getElementById('communityImageInput').click()">
+                        📷 Upload Hazard Photo
+                    </button>
+
+                    <input class="community-file" type="file" id="communityImageInput" 
+                            accept="image/*" style="display: none;">
+
+                    <select id="communityTag">
+                        <option>Damaged Road</option>
+                        <option>Poor Lighting</option>
+                        <option>Water Logging</option>
+                        <option>Road Block</option>
+                        <option>Other</option>
+                    </select>
+
+                    <textarea id="communityNote" class="community-note" 
+                            placeholder="Short note for nearby users..."></textarea>
+
+                    <button class="community-post-btn" type="button" onclick="submitCommunityPost()">
+                        Submit Community Alert
+                    </button>
+
+                    <div class="community-status" id="communityStatus"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-stack">
+            <div class="panel">
+                <div id="map"></div>
+            </div>
+
+            <div class="camera-panel" id="cameraPanel">
+                <h3 class="camera-title">Camera Intelligence</h3>
+                <p class="camera-subtitle">Run AI vehicle detection, OpenCV crowd analysis, and auto-sync all signals into one safety score.</p>
+
+                <video id="video" autoplay></video>
+                <button id="analyzeBtn" onclick="analyzeScene('autosync')">Capture Full Auto Sync</button>
+
+                <div class="camera-functions">
+                    <button type="button" class="function-card" id="vehicleCard" onclick="handleCameraOption('vehicle')">
+                        <h4 class="function-title">Vehicle AI</h4>
+                        <p class="function-text">Real AI object detection identifies cars, buses, bikes, and motorbikes from camera frames.</p>
+                    </button>
+                    <button type="button" class="function-card" id="crowdCard" onclick="handleCameraOption('crowd')">
+                        <h4 class="function-title">Crowd CV</h4>
+                        <p class="function-text">OpenCV people detection estimates crowd density and updates the crowd risk filter.</p>
+                    </button>
+                    <button type="button" class="function-card" id="syncCard" onclick="handleCameraOption('autosync')">
+                        <h4 class="function-title">Auto Sync</h4>
+                        <p class="function-text">Merges camera lighting, vehicles, crowd, and external traffic API into live scoring.</p>
+                    </button>
+                </div>
+                <div class="camera-status" id="cameraStatus">Select Vehicle AI, Crowd CV, or Auto Sync to run camera-based analysis.</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedbackModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:var(--surface); padding:24px; border-radius:16px; width:90%; max-width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 16px;">Your Feedback Matters</h3>
+        
+        <label style="display:block; margin-bottom:8px; font-weight:500;">Rating (1–5)</label>
+        <select id="feedbackRating" style="width:100%; padding:10px; border-radius:8px; margin-bottom:16px;">
+            <option value="5">5 - Excellent</option>
+            <option value="4">4 - Good</option>
+            <option value="3">3 - Average</option>
+            <option value="2">2 - Needs improvement</option>
+            <option value="1">1 - Poor</option>
+        </select>
+        
+        <label style="display:block; margin-bottom:8px; font-weight:500;">Comment (optional)</label>
+        <textarea id="feedbackComment" placeholder="What can we improve?" style="width:100%; height:100px; padding:10px; border-radius:8px; resize:vertical; margin-bottom:16px;"></textarea>
+        
+        <div style="display:flex; gap:12px; justify-content:flex-end;">
+            <button onclick="closeFeedbackModal()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:transparent; cursor:pointer;">Cancel</button>
+            <button onclick="submitAppFeedback()" style="padding:10px 20px; border:none; border-radius:8px; background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; font-weight:600; cursor:pointer;">Submit</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let map;
+let videoStream=null;
+let currentLat=null;
+let currentLon=null;
+let communityLayer=null;
+const userToken = 'guest-' + Math.random().toString(36).substr(2, 9);
+
+/* ==================== LANGUAGE SWITCH (NEW FEATURE) ==================== */
+const CURRENT_LANG_KEY = "voice_current_lang";
+let currentVoiceLang = localStorage.getItem(CURRENT_LANG_KEY) || "en";
+
+function switchLanguage(lang) {
+    if (!["en","te","hi"].includes(lang)) return;
+    
+    currentVoiceLang = lang;
+    localStorage.setItem(CURRENT_LANG_KEY, lang);
+
+    // Update active button
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.id === `lang-${lang}`);
+    });
+
+    // Speak confirmation in the NEW language
+    const confirmMsgs = {
+        en: "Voice language changed to English. Now speak in English only.",
+        te: "Voice language తెలుగు లో మార్చబడింది.",
+        hi: "वॉइस भाषा हिंदी में बदल दी गई।"
+    };
+    speakTextInLanguage(lang, confirmMsgs[lang]);
+    setCameraStatus(`Language switched to ${lang.toUpperCase()}`, "success");
+}
+/* =================================================================== */
+
+const VOICE_RULES={
+    en:{
+        recognitionLang:"en-US",
+        commands:["is this road safe","this road safe"],
+        response:(level,score)=>`The road is ${level}. Your safety score is ${score}.`
+    },
+    te:{
+        recognitionLang:"te-IN",
+        commands:[
+            "ee road ela undi",
+            "i road ela undi",
+            "\u0c08 \u0c30\u0c4b\u0c21\u0c4d \u0c0e\u0c32\u0c3e \u0c09\u0c02\u0c26\u0c3f"
+        ],
+        response:(level,score)=>`Ee road ${level} ga undi. Mee safety score ${score}.`
+    },
+    hi:{
+        recognitionLang:"hi-IN",
+        commands:[
+            "yeh road kaisa hai",
+            "yah road kaisa hai",
+            "\u092f\u0939 \u0930\u094b\u0921 \u0915\u0948\u0938\u093e \u0939\u0948"
+        ],
+        response:(level,score)=>`Yeh road ${level} hai. Aapka safety score ${score} hai.`
+    }
+};
+
+const VOICE_ALLOWED_INTENTS=["safety","traffic","lighting","crowd","area","help","thanks","greeting"];
+
+const VOICE_INTENT_PATTERNS={
+    safety:{
+        en:["safe","safety","safety score","road safe","risk score","overall score","is it safe","how safe"],
+        te:["safe","safety","score","ela undi","suraksha","kshema","road ela undi","ee road ela undi","e road ela undi","safe ga unda","safe ga undi","score enti","safety gurinchi cheppu","road safety gurinchi","nenu ippudu ee road lo vellocha","vellocha","ee road lo vellacha","road gurinchi cheppu","updates ivvu","\u0c38\u0c47\u0c2b\u0c4d","\u0c38\u0c4d\u0c15\u0c4b\u0c30\u0c4d","\u0c0e\u0c32\u0c3e \u0c09\u0c02\u0c26\u0c3f","\u0c15\u0c4d\u0c37\u0c47\u0c2e\u0c02","\u0c08 \u0c30\u0c4b\u0c21\u0c4d \u0c0e\u0c32\u0c3e \u0c09\u0c02\u0c26\u0c3f","\u0c30\u0c4b\u0c21\u0c4d \u0c17\u0c41\u0c30\u0c3f\u0c02\u0c1a\u0c3f \u0c1a\u0c46\u0c2a\u0c4d\u0c2a\u0c41","\u0c05\u0c2a\u0c4d\u0c21\u0c47\u0c1f\u0c4d\u0c38\u0c4d \u0c07\u0c35\u0c4d\u0c35\u0c41"],
+        hi:["safe","safety","score","road kaisa","surakshit","risk","yeh road kaisa hai","yah road kaisa hai","safe hai kya","score kya hai","\u0938\u0941\u0930\u0915\u094d\u0937\u093f\u0924","\u0938\u094d\u0915\u094b\u0930","\u0915\u0948\u0938\u093e","\u092f\u0939 \u0930\u094b\u0921 \u0915\u0948\u0938\u093e \u0939\u0948"]
+    },
+    traffic:{
+        en:["traffic","jam","rush","congestion"],
+        te:["traffic","jam","rush","\u0c1f\u0c4d\u0c30\u0c3e\u0c2b\u0c3f\u0c15\u0c4d","\u0c1c\u0c3e\u0c2e\u0c4d"],
+        hi:["traffic","jam","rush","\u091f\u094d\u0930\u0948\u092b\u093f\u0915","\u091c\u093e\u092e"]
+    },
+    lighting:{
+        en:["lighting","light","dark","brightness","visibility"],
+        te:["lighting","light","dark","brightness","velugu","\u0c32\u0c48\u0c1f\u0c3f\u0c02\u0c17\u0c4d","\u0c35\u0c46\u0c32\u0c41\u0c17\u0c41","\u0c1a\u0c40\u0c15\u0c1f\u0c3f"],
+        hi:["lighting","light","dark","brightness","roshni","\u0932\u093e\u0907\u091f","\u0930\u094c\u0936\u0928\u0940","\u0905\u0902\u0927\u0947\u0930\u093e"]
+    },
+    crowd:{
+        en:["crowd","people","busy","dense"],
+        te:["crowd","people","dense","janam","\u0c15\u0c4d\u0c30\u0c4c\u0c21\u0c4d","\u0c1c\u0c28\u0c02","\u0c17\u0c41\u0c02\u0c2a\u0c41"],
+        hi:["crowd","people","bheed","dense","\u092d\u0940\u0921","\u0932\u094b\u0917"]
+    },
+    area:{
+        en:["area","location","urban","rural","place"],
+        te:["area","location","urban","rural","place","\u0c2a\u0c4d\u0c30\u0c3e\u0c02\u0c24\u0c02","\u0c1a\u0c4b\u0c1f\u0c41"],
+        hi:["area","location","urban","rural","jagah","\u091c\u0917\u0939","\u0915\u094d\u0937\u0947\u0924\u094d\u0930"]
+    },
+    help:{
+        en:["help","what can you do","commands","options","assist"],
+        te:["help","commands","options","assist","cheppu","emi cheyagalavu","road gurinchi cheppu","updates ivvu","safety gurinchi cheppu","\u0c38\u0c39\u0c3e\u0c2f\u0c02","\u0c0f\u0c2e\u0c3f \u0c1a\u0c47\u0c2f\u0c17\u0c32\u0c35\u0c41"],
+        hi:["help","what can you do","commands","options","madad","kya kar sakti ho","\u092e\u0926\u0926","\u0915\u094d\u092f\u093e \u0915\u0930 \u0938\u0915\u0924\u0940 \u0939\u094b"]
+    },
+    greeting:{
+        en:["hello","hi","hey","good morning","good evening"],
+        te:["hello","hi","namaskaram","hey","\u0c28\u0c2e\u0c38\u0c4d\u0c15\u0c3e\u0c30\u0c02"],
+        hi:["hello","hi","hey","namaste","\u0928\u092e\u0938\u094d\u0924\u0947"]
+    },
+    thanks:{
+        en:["thanks","thank you","great"],
+        te:["thanks","thank you","dhanyavadamulu","kruthagnatha","\u0c27\u0c28\u0c4d\u0c2f\u0c35\u0c3e\u0c26\u0c3e\u0c32\u0c41"],
+        hi:["thanks","thank you","dhanyavad","\u0927\u0928\u094d\u092f\u0935\u093e\u0926","\u0936\u0941\u0915\u094d\u0930\u093f\u092f\u093e"]
+    }
+};
+
+function getUserToken(){
+    const key="community_user_token";
+    const existing=localStorage.getItem(key);
+    if(existing) return existing;
+    const created=(crypto.randomUUID && crypto.randomUUID()) || `user-${Date.now()}-${Math.floor(Math.random()*100000)}`;
+    localStorage.setItem(key,created);
+    return created;
+}
+
+function getFormValues(){
+    return {
+        area:document.getElementById("area").value,
+        lighting:document.getElementById("lighting").value,
+        traffic:document.getElementById("traffic").value,
+        crowd:document.getElementById("crowd").value,
+        vehicle_count:parseInt(document.getElementById("vehicleCount").value || "0",10),
+        lat:currentLat,
+        lon:currentLon
+    };
+}
+
+function setCameraStatus(message, type=""){
+    const statusEl=document.getElementById("cameraStatus");
+    statusEl.className="camera-status";
+    if(type) statusEl.classList.add(type);
+    statusEl.innerText=message;
+}
+
+function setActiveCard(option){
+    const cards={
+        vehicle:document.getElementById("vehicleCard"),
+        crowd:document.getElementById("crowdCard"),
+        autosync:document.getElementById("syncCard")
+    };
+    Object.values(cards).forEach(card=>card.classList.remove("active"));
+    cards[option].classList.add("active");
+}
+
+function waitForVideoReady(video){
+    return new Promise((resolve)=>{
+        if(video.readyState>=2 && video.videoWidth>0){
+            resolve();
+            return;
+        }
+        video.onloadedmetadata=()=>resolve();
+    });
+}
+
+async function handleCameraOption(option){
+    setActiveCard(option);
+    const opened=await openCamera();
+    if(!opened) return;
+    await waitForVideoReady(document.getElementById("video"));
+    analyzeScene(option);
+}
+
+function animateScore(target){
+    let current=0;
+    const el=document.getElementById("animatedScore");
+    const increment=Math.max(1,Math.ceil(target/40));
+    const interval=setInterval(()=>{
+        current+=increment;
+        if(current>=target){
+            current=target;
+            clearInterval(interval);
+        }
+        el.innerText="Score: "+current;
+    },18);
+}
+
+function renderScore(data){
+    const resultBox=document.getElementById("resultBox");
+    const resultLevel=document.getElementById("resultLevel");
+    const reasonList=document.getElementById("reasonList");
+
+    resultBox.style.display="block";
+    resultLevel.innerText="Safety Level: "+data.safety_level;
+    animateScore(data.score);
+
+    reasonList.innerHTML="";
+    data.reasons.forEach((reason)=>{
+        const li=document.createElement("li");
+        li.innerText=reason;
+        reasonList.appendChild(li);
+    });
+}
+
+function normalizeSpeechText(text){
+    const raw=(text || "").toLowerCase();
+    try{
+        return raw
+            .replace(/[^\p{L}\p{N}\s]/gu," ")
+            .replace(/\s+/g," ")
+            .trim();
+    }catch(_err){
+        return raw
+            .replace(/[^a-z0-9\u0900-\u097F\u0C00-\u0C7F\s]/g," ")
+            .replace(/\s+/g," ")
+            .trim();
+    }
+}
+
+function getIntentScore(text, phrases){
+    let score=0;
+    const normalized=normalizeSpeechText(text);
+    phrases.forEach((p)=>{
+        const target=normalizeSpeechText(p);
+        if(!target) return;
+        if(normalized.includes(target)){
+            score+=1;
+        }else{
+            const spokenTokens=new Set(normalized.split(" "));
+            const targetTokens=target.split(" ");
+            let hit=0;
+            targetTokens.forEach((t)=>{ if(spokenTokens.has(t)){ hit+=1; } });
+            if(targetTokens.length && (hit/targetTokens.length)>=0.6){
+                score+=0.6;
+            }
+        }
+    });
+    return score;
+}
+
+/* ==================== UPDATED FOR FIXED LANGUAGE (FAST + RELIABLE) ==================== */
+function detectVoiceIntent(transcript, lang = currentVoiceLang){
+    const text=normalizeSpeechText(transcript);
+    if(!text) return {intent:null, score:0};
+
+    let bestIntent=null;
+    let bestScore=0;
+    const intentKeys=VOICE_ALLOWED_INTENTS;
+
+    intentKeys.forEach((intent)=>{
+        const phrases = VOICE_INTENT_PATTERNS[intent][lang] || VOICE_INTENT_PATTERNS[intent].en || [];
+        const score = getIntentScore(text, phrases);
+        if(score > bestScore){
+            bestScore = score;
+            bestIntent = intent;
+        }
+    });
+
+    const threshold = (lang==="en") ? 0.65 : 0.5;
+    return {intent:(bestScore>=threshold ? bestIntent : null), score:bestScore};
+}
+
+function buildHumanReply(langKey, intent){
+    const area=document.getElementById("area").value;
+    const lighting=document.getElementById("lighting").value;
+    const traffic=document.getElementById("traffic").value;
+    const crowd=document.getElementById("crowd").value;
+
+    const replies={
+        en:{
+            help:"I respond only to this app: safety score, traffic, lighting, crowd, and area updates.",
+            greeting:"Hello. I am your Community Safety assistant. Ask about safety score, traffic, lighting, crowd, or area.",
+            thanks:"Happy to help. Stay safe.",
+            traffic:`Right now, traffic is ${traffic}.`,
+            lighting:`Right now, lighting is ${lighting}.`,
+            crowd:`Right now, crowd level is ${crowd}.`,
+            area:`Current area type is ${area}.`,
+            unknown:"I only respond to this app's commands: safety score, traffic, lighting, crowd, area, or help."
+        },
+        te:{
+            help:"Nenu ee app gurinche respond avutanu: safety score, traffic, lighting, crowd, area updates matrame.",
+            greeting:"Namaskaram. Nenu mee Community Safety assistant. Safety score/traffic/lighting/crowd/area gurinchi adagandi.",
+            thanks:"Santosham. Jagratthaga undandi.",
+            traffic:`Ippudu traffic ${traffic} ga undi.`,
+            lighting:`Ippudu lighting ${lighting} ga undi.`,
+            crowd:`Ippudu crowd ${crowd} ga undi.`,
+            area:`Ippudu area type ${area}.`,
+            unknown:"Nenu ee app commands ki matrame respond avutanu: safety score, traffic, lighting, crowd, area, leda help."
+        },
+        hi:{
+            help:"Main sirf is app ke baare mein bolungi: safety score, traffic, lighting, crowd aur area updates.",
+            greeting:"Namaste. Main aapki Community Safety assistant hoon. Safety score/traffic/lighting/crowd/area ke baare mein puchiye.",
+            thanks:"Theek hai. Surakshit rahiye.",
+            traffic:`Abhi traffic ${traffic} hai.`,
+            lighting:`Abhi lighting ${lighting} hai.`,
+            crowd:`Abhi crowd level ${crowd} hai.`,
+            area:`Abhi area type ${area} hai.`,
+            unknown:"Main sirf is app ke commands ka jawab deti hoon: safety score, traffic, lighting, crowd, area ya help."
+        }
+    };
+
+    return (replies[langKey] && replies[langKey][intent]) || replies.en[intent] || replies.en.unknown;
+}
+
+function speakTextInLanguage(langKey, text){
+    const rule = VOICE_RULES[langKey] || VOICE_RULES.en;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = rule.recognitionLang;
+
+    const voices = speechSynthesis.getVoices() || [];
+    let selectedVoice = null;
+
+    // Expanded list of common female Telugu voice names
+    // (Google TTS, Microsoft, Indian TTS engines, etc.)
+    const teluguFemaleNames = [
+        "shruti", "lekha", "veena", "swara", "priya", "heera",
+        "ananya", "nitya", "sita", "radha", "female", "woman", "girl",
+        "google తెలుగు", "telugu female", "telugu woman"
+    ];
+
+    if (langKey === "te") {
+        // Priority 1: Exact female name match
+        selectedVoice = voices.find(v => 
+            (v.lang || "").toLowerCase().startsWith("te") &&
+            teluguFemaleNames.some(hint => (v.name || "").toLowerCase().includes(hint))
+        );
+
+        // Priority 2: Any Telugu voice that doesn't contain "male"
+        if (!selectedVoice) {
+            selectedVoice = voices.find(v => 
+                (v.lang || "").toLowerCase().startsWith("te") &&
+                !/(male|man|boy|पुरुष|आदमी)/i.test(v.name || "")
+            );
+        }
+
+        // Priority 3: First available Telugu voice
+        if (!selectedVoice) {
+            selectedVoice = voices.find(v => (v.lang || "").toLowerCase().startsWith("te"));
+        }
+    } else {
+        // English & Hindi – keep original logic
+        const langPrefix = rule.recognitionLang.split("-")[0].toLowerCase();
+        selectedVoice = voices.find(v => 
+            (v.lang || "").toLowerCase().startsWith(langPrefix) && 
+            /female|woman|priya|swara|veena|siri|zira/i.test(v.name || "")
+        ) || voices.find(v => (v.lang || "").toLowerCase().startsWith(langPrefix)) || voices[0];
+    }
+
+    if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        console.log("Selected voice for " + langKey + ": " + selectedVoice.name); // ← debug line (remove later)
+    } else {
+        console.log("No Telugu voice found – using default");
+    }
+
+    // Force higher pitch for Telugu (makes male voices sound more female-like)
+    utterance.pitch = (langKey === "te") ? 1.18 : 1.08;  // ← increased to 1.18
+    utterance.rate = 1.0;
+
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+}
+
+function speakSafetySummary(langKey, safetyLevel, score){
+    const formatter=VOICE_RULES[langKey] || VOICE_RULES.en;
+    const message=formatter.response(safetyLevel,score);
+    const prefix = {en:"Certainly. ", te:"Sare. ", hi:"Bilkul. "}[langKey] || "";
+    speakTextInLanguage(langKey, `${prefix}${message}`);
+}
+
+function processVoiceIntent(intent, langKey){
+    if(intent && !VOICE_ALLOWED_INTENTS.includes(intent)){
+        speakTextInLanguage(langKey,buildHumanReply(langKey,"unknown"));
+        setCameraStatus("Voice request rejected (non-app command).","error");
+        return Promise.resolve();
+    }
+
+    if(intent==="safety"){
+        document.getElementById("voiceTrigger").value="true";
+        return calculateSafety(false)
+        .then((data)=>{
+            speakSafetySummary(langKey,data.safety_level,data.score);
+            setCameraStatus("Voice request handled with live safety calculation.","success");
+        })
+        .catch(()=>{
+            setCameraStatus("Voice-triggered score update failed.","error");
+        });
+    }
+
+    if(intent){
+        speakTextInLanguage(langKey,buildHumanReply(langKey,intent));
+        setCameraStatus("Voice response generated from current app data.","success");
+        return Promise.resolve();
+    }
+
+    speakTextInLanguage(langKey,buildHumanReply(langKey,"unknown"));
+    setCameraStatus("Voice command not understood. Try again.","success");
+    return Promise.resolve();
+}
+
+/* ==================== FAST RECOGNITION (single language only) ==================== */
+async function recognizeIntentInLanguage(langKey){
+    return new Promise((resolve, reject) => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if(!SpeechRecognition){
+            reject(new Error("Speech recognition not supported"));
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = VOICE_RULES[langKey].recognitionLang;
+        recognition.interimResults = true;
+        recognition.continuous = false;
+        recognition.maxAlternatives = 3;
+
+        let bestTranscript = "";
+        let timer = setTimeout(() => {
+            recognition.stop();
+            if(bestTranscript.trim()){
+                resolve({transcript: bestTranscript});
+            } else {
+                reject(new Error("timeout"));
+            }
+        }, 3500);   // VERY FAST for roadside use
+
+        recognition.onresult = function(event){
+            let transcript = "";
+            for(let i = event.resultIndex; i < event.results.length; i++){
+                transcript += event.results[i][0].transcript + " ";
+            }
+            bestTranscript = transcript.trim();
+
+            // Early exit on good final result
+            if(event.results[event.results.length-1].isFinal && bestTranscript.length > 6){
+                clearTimeout(timer);
+                recognition.stop();
+                resolve({transcript: bestTranscript});
+            }
+        };
+
+        recognition.onerror = function(){
+            clearTimeout(timer);
+            reject(new Error("recognition_error"));
+        };
+
+        recognition.onend = function(){
+            clearTimeout(timer);
+            if(bestTranscript.trim()){
+                resolve({transcript: bestTranscript});
+            } else {
+                reject(new Error("no_match"));
+            }
+        };
+
+        recognition.start();
+    });
+}
+
+async function detectVoiceIntentLive(){
+    setCameraStatus(`Listening in ${currentVoiceLang === 'en' ? 'English' : currentVoiceLang === 'te' ? 'Telugu' : 'Hindi'}... Speak naturally.`);
+
+    try{
+        const result = await recognizeIntentInLanguage(currentVoiceLang);
+        const intentResult = detectVoiceIntent(result.transcript, currentVoiceLang);
+        return {
+            intent: intentResult.intent,
+            lang: currentVoiceLang,
+            transcript: result.transcript,
+            score: intentResult.score
+        };
+    } catch(e){
+        setCameraStatus("Didn't catch that. Try speaking again.", "error");
+        return null;
+    }
+}
+
+/* ================================================================================== */
+
+function refreshVoicesCache(){
+    // just in case
+}
+
+function initVoices(){
+    if(typeof speechSynthesis.onvoiceschanged !== "undefined"){
+        speechSynthesis.onvoiceschanged=refreshVoicesCache;
+    }
+}
+
+function calculateSafety(triggerVoice=false){
+    const payload=getFormValues();
+    return fetch("/calculate-score",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+    })
+    .then(res=>res.json())
+    .then(data=>{
+        renderScore(data);
+        if(triggerVoice){
+            speakSafetySummary(currentVoiceLang, data.safety_level, data.score);
+        }
+        return data;
+    });
+}
+
+function fetchExternalTraffic(lat, lon){
+    return fetch("/external-traffic",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({lat:lat,lon:lon})
+    }).then(res=>res.json());
+}
+
+function setCommunityStatus(message,isError=false){
+    const el=document.getElementById("communityStatus");
+    el.style.color=isError ? "#dc2626" : "#0f766e";
+    el.innerText=message;
+}
+
+function fileToDataUrl(file){
+    return new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>reject();
+        reader.readAsDataURL(file);
+    });
+}
+
+function timeAgo(iso){
+    const dt=new Date(iso);
+    const sec=Math.max(1,Math.floor((Date.now()-dt.getTime())/1000));
+    if(sec<60) return `${sec}s ago`;
+    if(sec<3600) return `${Math.floor(sec/60)}m ago`;
+    if(sec<86400) return `${Math.floor(sec/3600)}h ago`;
+    return `${Math.floor(sec/86400)}d ago`;
+}
+
+function renderCommunityFeed(posts){
+    const feed=document.getElementById("communityFeed");
+    feed.innerHTML="";
+
+    posts.forEach((post)=>{
+        const card=document.createElement("div");
+        card.className="feed-item";
+        card.innerHTML = `
+            <strong>${post.tag}</strong>
+            <div class="community-meta">${timeAgo(post.created_at)} | (${post.lat.toFixed(5)}, ${post.lon.toFixed(5)})</div>
+            <div>${post.note || ""}</div>
+            <img class="feed-img" src="${post.image_url}" alt="community post">
+    
+            <div class="reaction-row">
+                <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Avoid')">Avoid (${post.reactions['Avoid']})</button>
+                <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Careful')">Careful (${post.reactions['Careful']})</button>
+                <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Safe now')">Safe now (${post.reactions['Safe now']})</button>
+            </div>
+
+            <div class="helpful-row">
+                Was this helpful?
+                <button class="helpful-btn yes" onclick="sendHelpful(${post.id}, true)">Yes</button>
+                <button class="helpful-btn no"  onclick="sendHelpful(${post.id}, false)">No</button>
+                <span id="helpful-status-${post.id}"></span>
+            </div>
+`       ;
+        feed.appendChild(card);
+    });
+
+    if(!posts.length){
+        feed.innerHTML="<div class='community-meta'>No community alerts yet.</div>";
+    }
+}
+
+async function sendHelpful(postId, isHelpful) {
+    try {
+        const res = await fetch(`/community-posts/${postId}/helpful`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                helpful: isHelpful,
+                user_token: userToken
+            })
+        });
+        
+        if (res.ok) {
+            const statusEl = document.getElementById(`helpful-status-${postId}`);
+            statusEl.innerText = isHelpful ? "Thanks!" : "Noted, thanks.";
+            statusEl.style.color = isHelpful ? "#16a34a" : "#dc2626";
+            setCommunityStatus("Feedback saved.");
+        } else {
+            setCommunityStatus("Could not save feedback.", true);
+        }
+    } catch (err) {
+        console.error(err);
+        setCommunityStatus("Network error while saving feedback.", true);
+    }
+}
+
+function showFeedbackModal() {
+    document.getElementById('feedbackModal').style.display = 'flex';
+}
+
+function closeFeedbackModal() {
+    document.getElementById('feedbackModal').style.display = 'none';
+}
+
+async function submitAppFeedback() {
+    const rating = parseInt(document.getElementById('feedbackRating').value);
+    const comment = document.getElementById('feedbackComment').value.trim();
+
+    try {
+        const res = await fetch('/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                rating: rating,
+                comment: comment,
+                user_token: userToken
+            })
+        });
+
+        if (res.ok) {
+            setCommunityStatus("Thank you! Your feedback has been sent.");
+            closeFeedbackModal();
+            document.getElementById('feedbackComment').value = '';
+        } else {
+            setCommunityStatus("Failed to send feedback. Try again.", true);
+        }
+    } catch (err) {
+        setCommunityStatus("Network error. Please check connection.", true);
+    }
+}
+
+// Preview selected file name
+document.getElementById('communityImageInput').addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name || '';
+    if (fileName) {
+        document.getElementById('communityStatus').innerText = 
+            'Selected: ' + fileName.substring(0, 25) + (fileName.length > 25 ? '...' : '');
+        document.getElementById('communityStatus').style.color = '#0f766e';
+    }
+});
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => console.log('Service Worker registered'))
+            .catch(error => console.log('Service Worker failed', error));
+    });
+}
+
+function renderCommunityMarkers(posts){
+    if(!map) return;
+    if(communityLayer) communityLayer.remove();
+    communityLayer=L.layerGroup().addTo(map);
+    posts.forEach((post)=>{
+        const marker=L.circleMarker([post.lat,post.lon],{
+            radius:7,
+            color:"#f97316",
+            fillColor:"#fb923c",
+            fillOpacity:0.9
+        }).addTo(communityLayer);
+        marker.bindPopup(`<b>${post.tag}</b><br>${post.note || ""}<br>${timeAgo(post.created_at)}`);
+    });
+}
+
+function loadCommunityPosts(){
+    return fetch("/community-posts")
+    .then(res=>res.json())
+    .then((data)=>{
+        const posts=data.posts || [];
+        renderCommunityFeed(posts);
+        renderCommunityMarkers(posts);
+        return posts;
+    });
+}
+
+async function submitCommunityPost(){
+    if(currentLat===null || currentLon===null){
+        setCommunityStatus("Location not ready. Allow GPS and try again.",true);
+        return;
+    }
+
+    const input=document.getElementById("communityImageInput");
+    const file=input.files[0];
+    if(!file){
+        setCommunityStatus("Select an image before uploading.",true);
+        return;
+    }
+
+    setCommunityStatus("Uploading community alert...");
+    try{
+        const imageData=await fileToDataUrl(file);
+        const payload={
+            image:imageData,
+            lat:currentLat,
+            lon:currentLon,
+            tag:document.getElementById("communityTag").value,
+            note:document.getElementById("communityNote").value.trim()
+        };
+        const res=await fetch("/community-posts",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(payload)
+        });
+        const data=await res.json();
+        if(!res.ok) throw new Error(data.message || "Upload failed");
+        input.value="";
+        document.getElementById("communityNote").value="";
+        setCommunityStatus("Community alert uploaded successfully.");
+        await loadCommunityPosts();
+        await calculateSafety();
+    }catch(error){
+        setCommunityStatus(`Upload failed: ${error.message || "unknown error"}`,true);
+    }
+}
+
+function reactToPost(postId,reactionType){
+    fetch(`/community-posts/${postId}/react`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            reaction_type:reactionType,
+            user_token:userToken
+        })
+    })
+    .then(res=>res.json())
+    .then(async(data)=>{
+        if(!data.ok) throw new Error(data.message || "Reaction failed");
+        setCommunityStatus(`Reaction saved: ${reactionType}`);
+        await loadCommunityPosts();
+        await calculateSafety();
+    })
+    .catch((error)=>{
+        setCommunityStatus(`Reaction failed: ${error.message || "unknown error"}`,true);
+    });
+}
+
+function captureFrameImage(video){
+    const canvas=document.createElement("canvas");
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    canvas.getContext("2d").drawImage(video,0,0);
+    return canvas.toDataURL("image/jpeg");
+}
+
+function formatVehicleSummary(vehicleMap){
+    const keys=Object.keys(vehicleMap||{});
+    if(!keys.length) return "none";
+    return keys.map((k)=>`${k}:${vehicleMap[k]}`).join(", ");
+}
+
+function analyzeScene(mode="autosync"){
+    const video=document.getElementById("video");
+    if(!videoStream || video.videoWidth===0){
+        setCameraStatus("Open camera first so analysis can capture a valid frame.","error");
+        return;
+    }
+
+    const statusByMode={
+        vehicle:"Running Vehicle AI detection...",
+        crowd:"Running Crowd CV detection...",
+        autosync:"Running full Auto Sync (camera + traffic API + score merge)..."
+    };
+    setCameraStatus(statusByMode[mode] || "Analyzing scene...");
+
+    const payload={
+        image:captureFrameImage(video),
+        lat:currentLat,
+        lon:currentLon
+    };
+
+    fetch("/analyze-scene",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+    })
+    .then(res=>res.json())
+    .then(data=>{
+        document.getElementById("lighting").value=data.lighting;
+        document.getElementById("crowd").value=data.crowd;
+        document.getElementById("traffic").value=data.traffic;
+        document.getElementById("vehicleCount").value=data.vehicle_count;
+
+        const vehicleSummary=formatVehicleSummary(data.vehicles_by_type);
+        const apiMsg=data.traffic_api && data.traffic_api.available
+            ? `traffic API: ${data.traffic_api.provider} (${data.traffic_api.traffic})`
+            : `traffic API unavailable, fallback camera traffic: ${data.camera_traffic}`;
+
+        if(mode==="vehicle"){
+            setCameraStatus(`Vehicle AI detected ${data.vehicle_count} vehicle(s) [${vehicleSummary}]. ${apiMsg}.`,"success");
+            return;
+        }
+        if(mode==="crowd"){
+            setCameraStatus(`Crowd CV detected ${data.crowd_count} people -> ${data.crowd} crowd. Lighting: ${data.lighting}.`,"success");
+            return;
+        }
+
+        setCameraStatus(`Auto Sync merged lighting (${data.lighting}), vehicles (${data.vehicle_count}), crowd (${data.crowd}), and traffic (${data.traffic}). Recalculating score...`,"success");
+        calculateSafety()
+        .then((scoreData)=>{
+            stopCamera();
+            setCameraStatus(`Auto Sync complete. Safety Level: ${scoreData.safety_level}, Score: ${scoreData.score}.`,"success");
+        })
+        .catch(()=>{
+            setCameraStatus("Auto Sync score update failed. Please try again.","error");
+        });
+    })
+    .catch(()=>{
+        setCameraStatus("Scene analysis failed. Please retry.","error");
+    });
+}
+
+// ==================== MAIN INIT + VOICE START ====================
+window.addEventListener("load", function(){
+    initVoices();
+
+    // Set initial active language button
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.id === `lang-${currentVoiceLang}`);
+    });
+
+    {% if score %}
+    animateScore({{score}});
+    {% endif %}
+
+    document.getElementById("safetyForm").addEventListener("submit",function(e){
+        e.preventDefault();
+        calculateSafety()
+        .then(()=>{
+            setCameraStatus("Safety score updated from selected filters without page refresh.","success");
+        })
+        .catch(()=>{
+            setCameraStatus("Score calculation failed. Please try again.","error");
+        });
+    });
+});
+
+// GPS + Map
+navigator.geolocation.getCurrentPosition(function(position){
+    const lat=position.coords.latitude;
+    const lon=position.coords.longitude;
+    currentLat=lat;
+    currentLon=lon;
+
+    map=L.map('map').setView([lat,lon],15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.marker([lat,lon]).addTo(map);
+
+    fetch('/detect-area',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({lat:lat,lon:lon})
+    })
+    .then(res=>res.json())
+    .then(data=>{
+        document.getElementById("area").value=data.area;
+    });
+
+    fetchExternalTraffic(lat,lon)
+    .then((trafficData)=>{
+        if(trafficData.available && trafficData.traffic){
+            document.getElementById("traffic").value=trafficData.traffic;
+            setCameraStatus(`External traffic integrated from ${trafficData.provider}: ${trafficData.traffic}.`,"success");
+        }else{
+            setCameraStatus(`External traffic API not active (${trafficData.message || "unknown"}).`,"error");
+        }
+    })
+    .catch(()=>{
+        setCameraStatus("External traffic API request failed; using manual selection.","error");
+    });
+
+    loadCommunityPosts().catch(()=>{});
+},function(){
+    setCameraStatus("GPS permission denied.","error");
+    loadCommunityPosts().catch(()=>{});
+});
+
+function toggleTheme(){
+    document.body.classList.toggle("dark-mode");
+}
+
+let voiceBusy=false;
+
+async function startVoice(){
+    if(voiceBusy) return;
+    voiceBusy=true;
+
+    try{
+        await primeMicrophoneForVoice();
+        const result = await detectVoiceIntentLive();
+        
+        if(result && result.intent){
+            await processVoiceIntent(result.intent, result.lang);
+        } else {
+            await processVoiceIntent(null, currentVoiceLang);
+        }
+    } catch(_err){
+        setCameraStatus("Voice assistant failed. Check microphone permission.","error");
+    } finally {
+        voiceBusy=false;
+    }
+}
+
+async function primeMicrophoneForVoice(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    try{
+        const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+        stream.getTracks().forEach(t=>t.stop());
+    }catch(_err){}
+}
+
+async function openCamera(){
+    const video=document.getElementById("video");
+    const analyzeBtn=document.getElementById("analyzeBtn");
+    const cameraPanel=document.getElementById("cameraPanel");
+
+    if(videoStream) return true;
+
+    video.style.display="block";
+    analyzeBtn.style.display="block";
+    cameraPanel.classList.add("live");
+
+    try{
+        const stream=await navigator.mediaDevices.getUserMedia({video:true});
+        videoStream=stream;
+        video.srcObject=stream;
+        setCameraStatus("Camera opened successfully.","success");
+        return true;
+    }catch(error){
+        setCameraStatus("Camera permission denied.","error");
+        return false;
+    }
+}
+
+function stopCamera(){
+    const video=document.getElementById("video");
+    const analyzeBtn=document.getElementById("analyzeBtn");
+    const cameraPanel=document.getElementById("cameraPanel");
+
+    video.style.display="none";
+    analyzeBtn.style.display="none";
+    cameraPanel.classList.remove("live");
+
+    if(videoStream){
+        videoStream.getTracks().forEach(track=>track.stop());
+        videoStream=null;
+    }
+}
+</script>
+
+</body>
+</html>
