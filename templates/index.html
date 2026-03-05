@@ -718,7 +718,7 @@
             </button>
 
             <!-- Camera -->
-            <button class="icon-btn" onclick="openCamera()">
+            <button class="icon-btn" onclick="openCamera(true)">
                 <svg viewBox="0 0 24 24">
                     <path d="M4 7h4l2-2h4l2 2h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>
                     <circle cx="12" cy="13" r="3.5"/>
@@ -847,8 +847,9 @@
                 <h3 class="camera-title">Camera Intelligence</h3>
                 <p class="camera-subtitle">Run AI vehicle detection, OpenCV crowd analysis, and auto-sync all signals into one safety score.</p>
 
-                <video id="video" autoplay></video>
+                <video id="video" autoplay playsinline muted></video>
                 <button id="analyzeBtn" onclick="analyzeScene('autosync')">Capture Full Auto Sync</button>
+                <button id="closeCameraBtn" onclick="stopCamera()">Close Camera</button>
 
                 <div class="camera-functions">
                     <button type="button" class="function-card" id="vehicleCard" onclick="handleCameraOption('vehicle')">
@@ -901,6 +902,8 @@ let videoStream=null;
 let currentLat=null;
 let currentLon=null;
 let communityLayer=null;
+let availableVideoInputs=[];
+let activeVideoInputIndex=-1;
 const userToken = 'guest-' + Math.random().toString(36).substr(2, 9);
 
 /* ==================== LANGUAGE SWITCH (NEW FEATURE) ==================== */
@@ -1794,22 +1797,114 @@ async function primeMicrophoneForVoice(){
     }catch(_err){}
 }
 
-async function openCamera(){
+function isMobileCameraDevice(){
+    const ua=(navigator.userAgent || "").toLowerCase();
+    return /android|iphone|ipad|ipod|mobile/.test(ua) || (navigator.maxTouchPoints || 0) > 1;
+}
+
+async function refreshVideoInputs(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices){
+        availableVideoInputs=[];
+        activeVideoInputIndex=-1;
+        return;
+    }
+    const devices=await navigator.mediaDevices.enumerateDevices();
+    availableVideoInputs=devices.filter((d)=>d.kind==="videoinput");
+}
+
+function detectActiveCameraIndex(){
+    if(!videoStream || !availableVideoInputs.length){
+        activeVideoInputIndex=-1;
+        return;
+    }
+    const track=videoStream.getVideoTracks()[0];
+    if(!track){
+        activeVideoInputIndex=-1;
+        return;
+    }
+    const settings=track.getSettings ? track.getSettings() : {};
+    if(settings.deviceId){
+        const idx=availableVideoInputs.findIndex((d)=>d.deviceId===settings.deviceId);
+        activeVideoInputIndex=idx;
+        return;
+    }
+    const label=(track.label || "").toLowerCase();
+    const byLabel=availableVideoInputs.findIndex((d)=>label && (d.label || "").toLowerCase()===label);
+    activeVideoInputIndex=byLabel;
+}
+
+async function switchMobileCamera(video){
+    if(!isMobileCameraDevice()){
+        return false;
+    }
+    await refreshVideoInputs();
+    if(availableVideoInputs.length<2){
+        setCameraStatus("Only one camera found on this device.","error");
+        return false;
+    }
+    detectActiveCameraIndex();
+    const nextIndex=(activeVideoInputIndex+1) % availableVideoInputs.length;
+    const nextDevice=availableVideoInputs[nextIndex];
+    const nextStream=await navigator.mediaDevices.getUserMedia({
+        video:{deviceId:{exact:nextDevice.deviceId}},
+        audio:false
+    });
+    if(videoStream){
+        videoStream.getTracks().forEach((t)=>t.stop());
+    }
+    videoStream=nextStream;
+    video.srcObject=nextStream;
+    activeVideoInputIndex=nextIndex;
+    return true;
+}
+
+async function openCamera(allowSwitch=false){
     const video=document.getElementById("video");
     const analyzeBtn=document.getElementById("analyzeBtn");
+    const closeCameraBtn=document.getElementById("closeCameraBtn");
     const cameraPanel=document.getElementById("cameraPanel");
+    const mobile=isMobileCameraDevice();
 
-    if(videoStream) return true;
+    if(videoStream){
+        if(allowSwitch && mobile){
+            try{
+                const switched=await switchMobileCamera(video);
+                if(switched){
+                    setCameraStatus("Camera switched.","success");
+                }
+                return switched || true;
+            }catch(_err){
+                setCameraStatus("Unable to switch camera.","error");
+                return true;
+            }
+        }
+        return true;
+    }
 
     video.style.display="block";
     analyzeBtn.style.display="block";
+    closeCameraBtn.style.display="block";
     cameraPanel.classList.add("live");
 
     try{
-        const stream=await navigator.mediaDevices.getUserMedia({video:true});
+        let stream=null;
+        if(mobile){
+            try{
+                stream=await navigator.mediaDevices.getUserMedia({
+                    video:{facingMode:{ideal:"environment"}},
+                    audio:false
+                });
+            }catch(_mobileErr){
+                stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+            }
+        }else{
+            stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+        }
         videoStream=stream;
         video.srcObject=stream;
-        setCameraStatus("Camera opened successfully.","success");
+        await refreshVideoInputs();
+        detectActiveCameraIndex();
+        setCameraStatus(mobile ? "Camera opened (back camera preferred)." : "Camera opened successfully.","success");
         return true;
     }catch(error){
         setCameraStatus("Camera permission denied.","error");
@@ -1820,10 +1915,12 @@ async function openCamera(){
 function stopCamera(){
     const video=document.getElementById("video");
     const analyzeBtn=document.getElementById("analyzeBtn");
+    const closeCameraBtn=document.getElementById("closeCameraBtn");
     const cameraPanel=document.getElementById("cameraPanel");
 
     video.style.display="none";
     analyzeBtn.style.display="none";
+    closeCameraBtn.style.display="none";
     cameraPanel.classList.remove("live");
 
     if(videoStream){
