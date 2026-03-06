@@ -1,5 +1,5 @@
 ﻿// service-worker.js
-const CACHE_NAME = 'safety-audit-v1-2025';
+const CACHE_NAME = 'safety-audit-v3-2026';
 const urlsToCache = [
   '/',
   '/manifest.json',

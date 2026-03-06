@@ -1024,6 +1024,29 @@
                 gap: 8px;
             }
 
+            .mobile-community-select,
+            .mobile-community-note {
+                width: 100%;
+                margin-top: 8px;
+                border-radius: 10px;
+                border: 1px solid #c3cfdf;
+                background: #f8fbff;
+                color: #0f172a;
+            }
+
+            .mobile-community-note {
+                min-height: 72px;
+                resize: vertical;
+                padding: 10px;
+            }
+
+            .mobile-selected-image {
+                margin-top: 8px;
+                font-size: 0.85rem;
+                color: #0f766e;
+                word-break: break-word;
+            }
+
             .mobile-community-actions .mobile-sheet-btn {
                 margin: 0;
                 text-align: center;
@@ -1061,6 +1084,44 @@
                 border-radius: 10px;
                 background: rgba(255,255,255,0.08);
                 border: 1px solid rgba(255,255,255,0.12);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+            }
+
+            .mobile-history-main {
+                min-width: 0;
+                flex: 1;
+            }
+
+            .mobile-history-top {
+                color: #f8fafc;
+                font-size: 0.88rem;
+                line-height: 1.2;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .mobile-history-meta {
+                margin-top: 2px;
+                color: #b7c7dc;
+                font-size: 0.78rem;
+                line-height: 1.2;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .mobile-history-del {
+                border: 1px solid rgba(255,255,255,0.28);
+                background: rgba(255,255,255,0.08);
+                color: #fff;
+                border-radius: 999px;
+                padding: 4px 10px;
+                font-size: 12px;
+                flex: 0 0 auto;
             }
 
             .mobile-sheet-btn {
@@ -1225,11 +1286,19 @@
             .dark-mode .mobile-stage-grid strong { color: #eef4ff; }
             .dark-mode .mobile-stage-note,
             .dark-mode .mobile-community-card p { color: #c7d2e0; }
+            .dark-mode .mobile-community-card h4 { color: #f8fafc; }
 
             .dark-mode .mobile-community-actions .mobile-sheet-btn {
                 color: #f8fafc;
                 background: #1f2937;
                 border-color: #374151;
+            }
+
+            .dark-mode .mobile-community-select,
+            .dark-mode .mobile-community-note {
+                background: #1a2434;
+                border-color: #334155;
+                color: #e2e8f0;
             }
 
             .dark-mode .mobile-community-status {
@@ -1347,6 +1416,15 @@
                     <button type="button" class="mobile-sheet-btn" onclick="quickUploadPhoto()">Upload Photo</button>
                     <button type="button" class="mobile-sheet-btn" onclick="submitCommunityPost()">Submit Alert</button>
                 </div>
+                <select id="mobileCommunityTag" class="mobile-community-select">
+                    <option>Damaged Road</option>
+                    <option>Poor Lighting</option>
+                    <option>Water Logging</option>
+                    <option>Road Block</option>
+                    <option>Other</option>
+                </select>
+                <textarea id="mobileCommunityNote" class="mobile-community-note" placeholder="Short note for nearby users..."></textarea>
+                <div id="mobileSelectedImageInfo" class="mobile-selected-image"></div>
                 <div class="mobile-community-status" id="mobileCommunityStatus"></div>
                 <div class="mobile-feed-list" id="mobileCommunityFeed"></div>
             </div>
@@ -1778,6 +1856,12 @@ function updateMobileSnapshot(){
     set("mCrowd", crowdEl ? crowdEl.value : "-");
 }
 
+function safeSetInnerHTML(el, html){
+    if(el && typeof el.innerHTML !== "undefined"){
+        el.innerHTML = html;
+    }
+}
+
 function getSafetyHistory(){
     try{
         const raw=localStorage.getItem(SAFETY_HISTORY_KEY);
@@ -1803,36 +1887,34 @@ function renderMobileHistory(){
         host.innerText="No history yet.";
         return;
     }
-    host.innerHTML="";
+    safeSetInnerHTML(host, "");
     list.forEach((item, index)=>{
         const row=document.createElement("div");
         row.className="mobile-history-item";
-        row.style.display="flex";
-        row.style.alignItems="center";
-        row.style.justifyContent="space-between";
-        row.style.gap="10px";
         row.style.cursor="pointer";
         row.onclick=()=>openHistoryEntry(index);
 
-        const text=document.createElement("div");
-        text.style.flex="1";
-        text.innerText=`${item.time} | ${item.level} | Score ${item.score}`;
+        const main=document.createElement("div");
+        main.className="mobile-history-main";
+        const top=document.createElement("div");
+        top.className="mobile-history-top";
+        top.innerText=`${item.time} | ${item.level} | Score ${item.score}`;
+        const meta=document.createElement("div");
+        meta.className="mobile-history-meta";
+        meta.innerText=`${item.area || "-"}, ${item.lighting || "-"}, ${item.traffic || "-"}, ${item.crowd || "-"}`;
+        main.appendChild(top);
+        main.appendChild(meta);
 
         const del=document.createElement("button");
         del.type="button";
         del.innerText="Delete";
-        del.style.border="1px solid rgba(255,255,255,0.28)";
-        del.style.background="rgba(255,255,255,0.08)";
-        del.style.color="#fff";
-        del.style.borderRadius="999px";
-        del.style.padding="4px 10px";
-        del.style.fontSize="12px";
+        del.className="mobile-history-del";
         del.onclick=(e)=>{
             e.stopPropagation();
             deleteHistoryEntry(index);
         };
 
-        row.appendChild(text);
+        row.appendChild(main);
         row.appendChild(del);
         host.appendChild(row);
     });
@@ -1855,7 +1937,7 @@ function openHistoryEntry(index){
 
     const note=document.getElementById("mobileStageNote");
     if(note){
-        note.innerText=`${item.time} | ${item.level} | Score ${item.score} | ${item.area || "-"}, ${item.lighting || "-"}, ${item.traffic || "-"}, ${item.crowd || "-"}`;
+        note.innerText=`${item.time} | ${item.level} | Score ${item.score}. ${item.area || "-"}, ${item.lighting || "-"}, ${item.traffic || "-"}, ${item.crowd || "-"}.`;
     }
     showMobileScoreCenter(item.level, item.score);
     setCameraStatus(`History loaded: ${item.level}, score ${item.score}.`, "success");
@@ -1918,6 +2000,7 @@ async function handleCameraOption(option){
 function animateScore(target){
     let current=0;
     const el=document.getElementById("animatedScore");
+    if(!el) return;
     const increment=Math.max(1,Math.ceil(target/40));
     const interval=setInterval(()=>{
         current+=increment;
@@ -1933,12 +2016,15 @@ function renderScore(data){
     const resultBox=document.getElementById("resultBox");
     const resultLevel=document.getElementById("resultLevel");
     const reasonList=document.getElementById("reasonList");
+    if(!resultBox || !resultLevel || !reasonList){
+        return;
+    }
 
     resultBox.style.display="block";
     resultLevel.innerText="Safety Level: "+data.safety_level;
     animateScore(data.score);
 
-    reasonList.innerHTML="";
+    safeSetInnerHTML(reasonList, "");
     data.reasons.forEach((reason)=>{
         const li=document.createElement("li");
         li.innerText=reason;
@@ -2302,11 +2388,58 @@ function setCommunityStatus(message,isError=false){
     }
 }
 
+function getCommunityTagValue(){
+    const mobileTag=document.getElementById("mobileCommunityTag");
+    if(isMobileCameraDevice() && mobileTag && mobileTag.value){
+        return mobileTag.value;
+    }
+    const desktopTag=document.getElementById("communityTag");
+    return desktopTag ? desktopTag.value : "Other";
+}
+
+function getCommunityNoteValue(){
+    const mobileNote=document.getElementById("mobileCommunityNote");
+    if(isMobileCameraDevice() && mobileNote){
+        return (mobileNote.value || "").trim();
+    }
+    const desktopNote=document.getElementById("communityNote");
+    return desktopNote ? (desktopNote.value || "").trim() : "";
+}
+
 function fileToDataUrl(file){
     return new Promise((resolve,reject)=>{
         const reader=new FileReader();
         reader.onload=()=>resolve(reader.result);
         reader.onerror=()=>reject();
+        reader.readAsDataURL(file);
+    });
+}
+
+function fileToOptimizedDataUrl(file, maxSide=1280, quality=0.82){
+    return new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>{
+            const img=new Image();
+            img.onload=()=>{
+                const canvas=document.createElement("canvas");
+                let w=img.width;
+                let h=img.height;
+                const longest=Math.max(w,h);
+                if(longest>maxSide){
+                    const scale=maxSide/longest;
+                    w=Math.max(1,Math.round(w*scale));
+                    h=Math.max(1,Math.round(h*scale));
+                }
+                canvas.width=w;
+                canvas.height=h;
+                const ctx=canvas.getContext("2d");
+                ctx.drawImage(img,0,0,w,h);
+                resolve(canvas.toDataURL("image/jpeg",quality));
+            };
+            img.onerror=()=>reject(new Error("Invalid image file."));
+            img.src=reader.result;
+        };
+        reader.onerror=()=>reject(new Error("Could not read file."));
         reader.readAsDataURL(file);
     });
 }
@@ -2321,10 +2454,11 @@ function timeAgo(iso){
 }
 
 function renderCommunityFeed(posts){
+    const safePosts=Array.isArray(posts) ? posts : [];
     const renderInto=(feed)=>{
         if(!feed) return;
-        feed.innerHTML="";
-        posts.forEach((post)=>{
+        safeSetInnerHTML(feed, "");
+        safePosts.forEach((post)=>{
             const card=document.createElement("div");
             card.className="feed-item";
             card.innerHTML = `
@@ -2349,8 +2483,8 @@ function renderCommunityFeed(posts){
             feed.appendChild(card);
         });
 
-        if(!posts.length){
-            feed.innerHTML="<div class='community-meta'>No community alerts yet.</div>";
+        if(!safePosts.length){
+            safeSetInnerHTML(feed, "<div class='community-meta'>No community alerts yet.</div>");
         }
     };
 
@@ -2371,8 +2505,10 @@ async function sendHelpful(postId, isHelpful) {
         
         if (res.ok) {
             const statusEl = document.getElementById(`helpful-status-${postId}`);
-            statusEl.innerText = isHelpful ? "Thanks!" : "Noted, thanks.";
-            statusEl.style.color = isHelpful ? "#16a34a" : "#dc2626";
+            if(statusEl){
+                statusEl.innerText = isHelpful ? "Thanks!" : "Noted, thanks.";
+                statusEl.style.color = isHelpful ? "#16a34a" : "#dc2626";
+            }
             setCommunityStatus("Feedback saved.");
         } else {
             setCommunityStatus("Could not save feedback.", true);
@@ -2418,15 +2554,21 @@ async function submitAppFeedback() {
     }
 }
 
-// Preview selected file name
-document.getElementById('communityImageInput').addEventListener('change', function(e) {
-    const fileName = e.target.files[0]?.name || '';
-    if (fileName) {
-        document.getElementById('communityStatus').innerText = 
-            'Selected: ' + fileName.substring(0, 25) + (fileName.length > 25 ? '...' : '');
-        document.getElementById('communityStatus').style.color = '#0f766e';
-    }
-});
+const input = document.getElementById('communityImageInput');
+const status = document.getElementById('communityStatus');
+
+if (input && status) {
+    input.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const name = file.name.length > 30 ? file.name.substring(0, 27) + '...' : file.name;
+            status.innerText = 'Selected: ' + name;
+            status.style.color = '#0f766e';
+        } else {
+            status.innerText = '';
+        }
+    });
+}
 
 // Register Service Worker
 if ('serviceWorker' in navigator) {
@@ -2478,33 +2620,56 @@ async function submitCommunityPost(){
 
     setCommunityStatus("Uploading community alert...");
     try{
-        const imageData=file ? await fileToDataUrl(file) : mobileCapturedImageData;
-        const noteEl=document.getElementById("communityNote");
-        if(noteEl && !noteEl.value.trim() && mobileCapturedImageData){
-            noteEl.value="Captured from mobile camera.";
+        const imageData=file ? await fileToOptimizedDataUrl(file) : mobileCapturedImageData;
+        const desktopNoteEl=document.getElementById("communityNote");
+        const mobileNoteEl=document.getElementById("mobileCommunityNote");
+        const currentNote=getCommunityNoteValue();
+        if(!currentNote && mobileCapturedImageData){
+            if(isMobileCameraDevice() && mobileNoteEl){
+                mobileNoteEl.value="Captured from mobile camera.";
+            }else if(desktopNoteEl){
+                desktopNoteEl.value="Captured from mobile camera.";
+            }
         }
         const payload={
             image:imageData,
             lat:currentLat,
             lon:currentLon,
-            tag:document.getElementById("communityTag").value,
-            note:(noteEl ? noteEl.value : "").trim()
+            tag:getCommunityTagValue(),
+            note:getCommunityNoteValue()
         };
         const res=await fetch("/community-posts",{
             method:"POST",
             headers:{"Content-Type":"application/json"},
+            cache:"no-store",
             body:JSON.stringify(payload)
         });
         const data=await res.json();
         if(!res.ok) throw new Error(data.message || "Upload failed");
         input.value="";
         mobileCapturedImageData=null;
-        document.getElementById("communityNote").value="";
+        if(desktopNoteEl) desktopNoteEl.value="";
+        if(mobileNoteEl) mobileNoteEl.value="";
+        const mobileInfo=document.getElementById("mobileSelectedImageInfo");
+        if(mobileInfo) mobileInfo.innerText="";
         setCommunityStatus("Community alert uploaded successfully.");
-        await loadCommunityPosts();
-        await calculateSafety();
+        try{
+            await loadCommunityPosts();
+        }catch(_uiErr){
+            setCommunityStatus("Community alert uploaded. Feed refresh failed; retry page refresh.",true);
+        }
+        try{
+            await calculateSafety();
+        }catch(_scoreErr){
+            setCameraStatus("Alert uploaded, but score refresh failed. Try Check Safety.","error");
+        }
     }catch(error){
-        setCommunityStatus(`Upload failed: ${error.message || "unknown error"}`,true);
+        const msg=(error && error.message) ? error.message : "network error";
+        if((msg || "").toLowerCase().includes("failed to fetch")){
+            setCommunityStatus("Upload failed: network issue/server restart. Please retry.",true);
+        }else{
+            setCommunityStatus(`Upload failed: ${msg}`,true);
+        }
     }
 }
 
@@ -2570,7 +2735,13 @@ function analyzeScene(mode="autosync"){
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify(payload)
     })
-    .then(res=>res.json())
+    .then(async(res)=>{
+        const data=await res.json().catch(()=>({ok:false,message:"Invalid server response"}));
+        if(!res.ok || data.ok===false){
+            throw new Error(data.message || `Analyze request failed (${res.status})`);
+        }
+        return data;
+    })
     .then(data=>{
         document.getElementById("lighting").value=data.lighting;
         document.getElementById("crowd").value=data.crowd;
@@ -2582,19 +2753,21 @@ function analyzeScene(mode="autosync"){
         const apiMsg=data.traffic_api && data.traffic_api.available
             ? `traffic API: ${data.traffic_api.provider} (${data.traffic_api.traffic})`
             : `traffic API unavailable, fallback camera traffic: ${data.camera_traffic}`;
+        const detectorMsg=data.detector ? `detector: ${data.detector}` : "detector: unknown";
+        const warningMsg=data.low_light_warning ? ` ${data.low_light_warning}` : "";
 
         if(mode==="vehicle"){
-            setCameraStatus(`Vehicle AI detected ${data.vehicle_count} vehicle(s) [${vehicleSummary}]. ${apiMsg}.`,"success");
+            setCameraStatus(`Vehicle AI detected ${data.vehicle_count} vehicle(s) [${vehicleSummary}] using ${detectorMsg}. ${apiMsg}.${warningMsg}`,"success");
             speakTextInLanguage(currentVoiceLang, `Vehicle analysis complete. Detected ${data.vehicle_count} vehicles.`);
             return;
         }
         if(mode==="crowd"){
-            setCameraStatus(`Crowd CV detected ${data.crowd_count} people -> ${data.crowd} crowd. Lighting: ${data.lighting}.`,"success");
+            setCameraStatus(`Crowd CV detected ${data.crowd_count} people -> ${data.crowd} crowd. Lighting: ${data.lighting}. ${detectorMsg}.${warningMsg}`,"success");
             speakTextInLanguage(currentVoiceLang, `Crowd analysis complete. Crowd is ${data.crowd}.`);
             return;
         }
 
-        setCameraStatus(`Auto Sync merged lighting (${data.lighting}), vehicles (${data.vehicle_count}), crowd (${data.crowd}), and traffic (${data.traffic}). Recalculating score...`,"success");
+        setCameraStatus(`Auto Sync merged lighting (${data.lighting}), vehicles (${data.vehicle_count}), crowd (${data.crowd}), and traffic (${data.traffic}). ${detectorMsg}. Recalculating score...${warningMsg}`,"success");
         calculateSafety()
         .then((scoreData)=>{
             stopCamera();
@@ -2605,8 +2778,8 @@ function analyzeScene(mode="autosync"){
             setCameraStatus("Auto Sync score update failed. Please try again.","error");
         });
     })
-    .catch(()=>{
-        setCameraStatus("Scene analysis failed. Please retry.","error");
+    .catch((error)=>{
+        setCameraStatus(error.message || "Scene analysis failed. Please retry.","error");
     });
 }
 

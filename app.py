@@ -14,6 +14,10 @@ import certifi
 import sqlite3
 import uuid
 from werkzeug.utils import secure_filename
+try:
+    from ultralytics import YOLO
+except Exception:
+    YOLO = None
 
 app = Flask(__name__)
 
@@ -38,6 +42,9 @@ VEHICLE_CLASSES = {"bicycle", "bus", "car", "motorbike", "train"}
 _vehicle_net = None
 _vehicle_net_lock = threading.Lock()
 _hog_detector = None
+_yolo_model = None
+_yolo_model_lock = threading.Lock()
+YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8n.pt")
 
 # Lightweight .env loader
 def load_local_env():
@@ -62,6 +69,7 @@ if not os.getenv("TOMTOM_API_KEY"):
 
 def log_service_status():
     print(f"TOMTOM_API_KEY set: {bool(os.getenv('TOMTOM_API_KEY'))}")
+    print(f"YOLO available: {YOLO is not None} ({YOLO_MODEL_NAME})")
 
 def is_urban_area(lat, lon):
     distance = math.sqrt((lat - CITY_LAT) ** 2 + (lon - CITY_LON) ** 2)
@@ -150,11 +158,15 @@ def detect_lighting(img):
     return lighting, round(brightness, 2)
 
 def detect_vehicles_dnn(img, confidence_threshold=0.45):
-    net = get_vehicle_detector()
-    resized = cv2.resize(img, (300, 300))
-    blob = cv2.dnn.blobFromImage(resized, 0.007843, (300, 300), 127.5)
-    net.setInput(blob)
-    detections = net.forward()
+    try:
+        net = get_vehicle_detector()
+        resized = cv2.resize(img, (300, 300))
+        blob = cv2.dnn.blobFromImage(resized, 0.007843, (300, 300), 127.5)
+        net.setInput(blob)
+        detections = net.forward()
+    except Exception:
+        # Fallback: if model download/load fails on hosting, do not break full scene analysis.
+        return 0, {}
 
     counts = {}
     for i in range(detections.shape[2]):
@@ -184,6 +196,99 @@ def detect_crowd_opencv(img):
     people_count = len(boxes)
     crowd_label = "Dense" if people_count >= 4 else "Less"
     return people_count, crowd_label
+
+def get_yolo_detector():
+    global _yolo_model
+    if _yolo_model is not None:
+        return _yolo_model
+    if YOLO is None:
+        raise RuntimeError("ultralytics not installed")
+    with _yolo_model_lock:
+        if _yolo_model is None:
+            _yolo_model = YOLO(YOLO_MODEL_NAME)
+    return _yolo_model
+
+def preprocess_for_detection(img):
+    # CLAHE on luminance channel for better shadow detail.
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+    l = clahe.apply(l)
+    merged = cv2.merge((l, a, b))
+    out = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+
+    gray = cv2.cvtColor(out, cv2.COLOR_BGR2GRAY)
+    brightness = float(np.mean(gray))
+
+    # Mild gamma boost for dark scenes.
+    gamma = 0.95 if brightness >= 95 else (0.85 if brightness >= 55 else 0.72)
+    inv_gamma = 1.0 / gamma
+    lut = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
+    out = cv2.LUT(out, lut)
+
+    # Light sharpening to improve small-object edges.
+    kernel = np.array([[0, -1, 0], [-1, 5.15, -1], [0, -1, 0]], dtype=np.float32)
+    out = cv2.filter2D(out, -1, kernel)
+
+    # Mild denoise only for very low light to reduce sensor grain.
+    if brightness < 45:
+        out = cv2.fastNlMeansDenoisingColored(out, None, 3, 3, 7, 21)
+
+    return out
+
+def yolo_conf_threshold(brightness):
+    if brightness < 40:
+        return 0.25
+    if brightness < 75:
+        return 0.30
+    return 0.35
+
+def detect_scene_yolo(img, brightness):
+    detector = get_yolo_detector()
+    conf = yolo_conf_threshold(brightness)
+    results = detector.predict(source=img, conf=conf, iou=0.5, verbose=False, imgsz=960)
+
+    vehicles_by_type = {}
+    people_count = 0
+    class_map = {
+        "car": "car",
+        "bus": "bus",
+        "truck": "truck",
+        "bicycle": "bicycle",
+        "motorcycle": "motorbike",
+        "motorbike": "motorbike",
+        "person": "person"
+    }
+
+    for result in results:
+        names = result.names
+        boxes = result.boxes
+        if boxes is None:
+            continue
+        for c in boxes.cls:
+            cls_id = int(c.item())
+            cls_name = names.get(cls_id, "").lower()
+            mapped = class_map.get(cls_name)
+            if mapped == "person":
+                people_count += 1
+            elif mapped:
+                vehicles_by_type[mapped] = vehicles_by_type.get(mapped, 0) + 1
+
+    vehicle_count = sum(vehicles_by_type.values())
+    crowd = "Dense" if people_count >= 4 else "Less"
+    return vehicle_count, vehicles_by_type, people_count, crowd
+
+def merge_traffic_signals(camera_traffic, traffic_api):
+    if not traffic_api.get("available"):
+        return camera_traffic, "camera_only"
+
+    tomtom_traffic = traffic_api.get("traffic") or "Low"
+    speed_ratio = float(traffic_api.get("speed_ratio") or 1.0)
+
+    # Conservative merge: raise risk if either source indicates pressure.
+    merged = "High" if (camera_traffic == "High" or tomtom_traffic == "High" or speed_ratio < 0.75) else "Low"
+    source = "merged(camera+tomtom)"
+    return merged, source
 
 def estimate_traffic_from_vehicles(vehicle_count):
     return "High" if vehicle_count >= 3 else "Low"
@@ -316,15 +421,22 @@ def init_storage():
         conn.commit()
 
 def decode_data_url_image(image_data_url):
-    image_bytes = base64.b64decode(image_data_url.split(",")[1])
+    if not image_data_url or "," not in image_data_url:
+        raise ValueError("Invalid image payload.")
+    image_bytes = base64.b64decode(image_data_url.split(",", 1)[1])
     np_arr = np.frombuffer(image_bytes, np.uint8)
-    return cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("Unable to decode image.")
+    return image
 
 def save_uploaded_community_image(image_data_url):
     image = decode_data_url_image(image_data_url)
     filename = secure_filename(f"{uuid.uuid4().hex}.jpg")
     file_path = os.path.join(UPLOAD_DIR, filename)
-    cv2.imwrite(file_path, image)
+    ok = cv2.imwrite(file_path, image)
+    if not ok:
+        raise RuntimeError("Failed to write image file.")
     return f"/uploads/{filename}"
 
 def get_db_connection():
@@ -500,6 +612,11 @@ def icon_192_file():
 @app.route("/icon-512.png", methods=["GET"])
 def icon_512_file():
     return send_from_directory(BASE_DIR, "icon-512.png")
+
+@app.route("/uploads/<path:filename>", methods=["GET"])
+def uploaded_file(filename):
+    return send_from_directory(UPLOAD_DIR, filename)
+
 @app.route("/community-posts", methods=["GET", "POST"])
 def community_posts():
     if request.method == "GET":
@@ -515,17 +632,20 @@ def community_posts():
     if not image or lat is None or lon is None:
         return jsonify({"ok": False, "message": "image, lat, lon required"}), 400
 
-    image_url = save_uploaded_community_image(image)
-    created_at = datetime.utcnow().isoformat()
-    with get_db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO posts (image_url, lat, lon, tag, note, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (image_url, float(lat), float(lon), tag, note, created_at)
-        )
-        conn.commit()
+    try:
+        image_url = save_uploaded_community_image(image)
+        created_at = datetime.utcnow().isoformat()
+        with get_db_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO posts (image_url, lat, lon, tag, note, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (image_url, float(lat), float(lon), tag, note, created_at)
+            )
+            conn.commit()
+    except Exception as exc:
+        return jsonify({"ok": False, "message": f"Upload processing failed: {str(exc)}"}), 500
 
     return jsonify({"ok": True, "message": "Community post uploaded."})
 
@@ -601,37 +721,60 @@ def submit_app_feedback():
 
 @app.route("/analyze-scene", methods=["POST"])
 def analyze_scene():
-    data = request.json or {}
-    image_raw = data.get("image", "")
-    image_bytes = base64.b64decode(image_raw.split(",")[1])
-    np_arr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    try:
+        data = request.json or {}
+        image_raw = data.get("image", "")
+        if not image_raw or "," not in image_raw:
+            return jsonify({"ok": False, "message": "Invalid camera frame. Please keep camera open and try again."}), 400
 
-    lighting, brightness = detect_lighting(img)
-    vehicle_count, vehicles_by_type = detect_vehicles_dnn(img)
-    people_count, crowd = detect_crowd_opencv(img)
+        image_bytes = base64.b64decode(image_raw.split(",", 1)[1])
+        np_arr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if img is None:
+            return jsonify({"ok": False, "message": "Unable to decode image frame on server."}), 400
 
-    camera_traffic = estimate_traffic_from_vehicles(vehicle_count)
-    lat = data.get("lat")
-    lon = data.get("lon")
+        processed_img = preprocess_for_detection(img)
+        lighting, brightness = detect_lighting(processed_img)
+        detector_used = "fallback"
+        try:
+            vehicle_count, vehicles_by_type, people_count, crowd = detect_scene_yolo(processed_img, brightness)
+            detector_used = "yolov8n"
+        except Exception:
+            vehicle_count, vehicles_by_type = detect_vehicles_dnn(processed_img, confidence_threshold=0.30)
+            people_count, crowd = detect_crowd_opencv(processed_img)
+            detector_used = "mobilenet_hog"
 
-    traffic_api = {"available": False, "message": "Location not provided."}
-    if lat is not None and lon is not None:
-        traffic_api = fetch_external_traffic(float(lat), float(lon))
+        camera_traffic = estimate_traffic_from_vehicles(vehicle_count)
+        lat = data.get("lat")
+        lon = data.get("lon")
 
-    final_traffic = traffic_api["traffic"] if traffic_api.get("available") else camera_traffic
+        traffic_api = {"available": False, "message": "Location not provided."}
+        if lat is not None and lon is not None:
+            traffic_api = fetch_external_traffic(float(lat), float(lon))
 
-    return jsonify({
-        "lighting": lighting,
-        "brightness": brightness,
-        "vehicle_count": vehicle_count,
-        "vehicles_by_type": vehicles_by_type,
-        "crowd_count": people_count,
-        "crowd": crowd,
-        "camera_traffic": camera_traffic,
-        "traffic": final_traffic,
-        "traffic_api": traffic_api
-    })
+        final_traffic, traffic_source = merge_traffic_signals(camera_traffic, traffic_api)
+        low_light_warning = (
+            "Very low light detected - detection may be limited. Try in brighter conditions if possible."
+            if brightness < 38 else ""
+        )
+
+        return jsonify({
+            "ok": True,
+            "lighting": lighting,
+            "brightness": brightness,
+            "vehicle_count": vehicle_count,
+            "vehicles_by_type": vehicles_by_type,
+            "crowd_count": people_count,
+            "crowd": crowd,
+            "camera_traffic": camera_traffic,
+            "traffic": final_traffic,
+            "traffic_api": traffic_api,
+            "traffic_source": traffic_source,
+            "detector": detector_used,
+            "low_light_warning": low_light_warning
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "message": f"Analyze failed: {str(exc)}"}), 500
 
 @app.route("/analyze-lighting", methods=["POST"])
 def analyze_lighting():
