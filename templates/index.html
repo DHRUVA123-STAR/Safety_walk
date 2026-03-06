@@ -805,8 +805,10 @@
             .mobile-stage {
                 display: flex;
                 justify-content: center;
-                align-items: center;
+                align-items: flex-start;
                 height: calc(100dvh - 190px);
+                overflow-y: auto;
+                padding-bottom: 18px;
             }
 
             .mobile-stage-card {
@@ -881,13 +883,13 @@
             .mobile-chatbar {
                 display: flex;
                 align-items: center;
-                gap: 10px;
+                gap: 6px;
                 position: fixed;
                 left: 12px;
                 right: 12px;
                 bottom: 10px;
                 z-index: 1100;
-                padding: 10px;
+                padding: 8px;
                 border-radius: 999px;
                 background: rgba(255,255,255,0.92);
                 border: 1px solid rgba(15,23,42,0.14);
@@ -901,8 +903,8 @@
 
             .mobile-plus-btn,
             .mobile-icon-btn {
-                width: 48px;
-                height: 48px;
+                width: 42px;
+                height: 42px;
                 border-radius: 999px;
                 display: inline-flex;
                 align-items: center;
@@ -910,7 +912,7 @@
                 background: rgba(241,245,249,0.95);
                 color: #0f172a;
                 border: 1px solid rgba(15,23,42,0.18);
-                font-size: 22px;
+                font-size: 20px;
                 flex: 0 0 auto;
             }
 
@@ -928,12 +930,14 @@
                 flex: 1 1 auto;
                 min-width: 0;
                 border-radius: 999px;
-                padding: 13px 16px;
+                padding: 11px 10px;
                 background: linear-gradient(135deg, #2575fc 0%, #1fc3d6 100%);
                 color: #ffffff;
                 font-weight: 700;
-                font-size: 15px;
+                font-size: 13px;
                 white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
             .mobile-quick-sheet,
@@ -996,7 +1000,7 @@
 
             .mobile-community-card {
                 display: block;
-                margin-top: 12px;
+                margin-top: 14px;
                 border-radius: 14px;
                 padding: 12px;
                 background: rgba(255,255,255,0.92);
@@ -1212,6 +1216,47 @@
             }
 
             .dark-mode .mobile-icon-btn svg { stroke: #fff; }
+
+            .mobile-capture-preview {
+                display: none;
+            }
+
+            body.camera-fullscreen-mode .mobile-capture-preview.show {
+                display: block;
+                position: fixed;
+                left: 12px;
+                right: 12px;
+                top: 16px;
+                z-index: 1212;
+                border-radius: 12px;
+                background: rgba(0,0,0,0.45);
+                border: 1px solid rgba(255,255,255,0.24);
+                padding: 10px;
+            }
+
+            .mobile-capture-preview img {
+                width: 100%;
+                max-height: 150px;
+                object-fit: cover;
+                border-radius: 8px;
+                border: 1px solid rgba(255,255,255,0.2);
+                margin-bottom: 8px;
+            }
+
+            .mobile-capture-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .mobile-capture-actions button {
+                border: 1px solid rgba(255,255,255,0.25);
+                border-radius: 10px;
+                padding: 10px 8px;
+                color: #fff;
+                background: rgba(255,255,255,0.08);
+                font-weight: 700;
+            }
         }
 
         #feedbackModal .feedback-modal-content {
@@ -1262,6 +1307,14 @@
                 <div><span>Crowd</span><strong id="mCrowd">-</strong></div>
             </div>
             <div class="mobile-stage-note" id="mobileStageNote">Tap Check Safety to calculate live score.</div>
+            <div class="mobile-community-card" id="mobileCommunityCard">
+                <h4>Community Alert</h4>
+                <p>Share captured/uploaded hazard with nearby users.</p>
+                <div class="mobile-community-actions">
+                    <button type="button" class="mobile-sheet-btn" onclick="quickUploadPhoto()">Upload Photo</button>
+                    <button type="button" class="mobile-sheet-btn" onclick="submitCommunityPost()">Submit Alert</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1443,6 +1496,7 @@
 <div class="mobile-quick-sheet" id="mobileQuickSheet">
     <button class="mobile-sheet-btn" type="button" onclick="quickUploadPhoto()">Upload Photo</button>
     <button class="mobile-sheet-btn" type="button" onclick="openCaptureCameraFullscreen()">Open Camera</button>
+    <button class="mobile-sheet-btn" type="button" onclick="submitCommunityPost()">Submit Community Alert</button>
 </div>
 
 <div class="mobile-lang-sheet" id="mobileLangSheet">
@@ -1462,15 +1516,6 @@
     </div>
     <div id="mobileHistoryList" class="mobile-history-list">No history yet.</div>
 </aside>
-
-<div class="mobile-community-card" id="mobileCommunityCard">
-    <h4>Community Alert</h4>
-    <p>Share captured/uploaded hazard with nearby users.</p>
-    <div class="mobile-community-actions">
-        <button type="button" class="mobile-sheet-btn" onclick="quickUploadPhoto()">Upload Photo</button>
-        <button type="button" class="mobile-sheet-btn" onclick="submitCommunityPost()">Submit Alert</button>
-    </div>
-</div>
 
 <div class="mobile-chatbar" id="mobileChatBar">
     <button class="mobile-plus-btn" type="button" onclick="toggleMobileQuickSheet()">+</button>
@@ -1503,6 +1548,13 @@
 
 <video id="mobileFullscreenVideo" autoplay playsinline></video>
 <div id="mobileCamSubtitle" class="mobile-cam-subtitle"></div>
+<div class="mobile-capture-preview" id="mobileCapturePreview">
+    <img id="mobileCaptureImage" alt="Captured preview">
+    <div class="mobile-capture-actions">
+        <button type="button" onclick="retakeCapturedPhoto()">Retake</button>
+        <button type="button" onclick="submitCapturedAlertQuick()">Submit Alert</button>
+    </div>
+</div>
 
 <div id="fullscreenCamControls">
     <button class="fs-cam-btn" type="button" onclick="switchLiveCamera()" aria-label="Switch camera">⟲</button>
@@ -2669,11 +2721,35 @@ function mobilePrimaryCameraAction(){
             return;
         }
         mobileCapturedImageData=captureFrameImage(video);
-        setCameraStatus("Photo captured. You can submit it as Community Alert.","success");
+        const preview=document.getElementById("mobileCapturePreview");
+        const previewImg=document.getElementById("mobileCaptureImage");
+        if(preview && previewImg){
+            previewImg.src=mobileCapturedImageData;
+            preview.classList.add("show");
+        }
+        setCameraStatus("Photo captured. Tap 'Submit Alert' here or use '+' then 'Submit Community Alert'.","success");
         speakTextInLanguage(currentVoiceLang, "Photo captured successfully.");
         return;
     }
     analyzeScene("autosync");
+}
+
+function retakeCapturedPhoto(){
+    const preview=document.getElementById("mobileCapturePreview");
+    if(preview) preview.classList.remove("show");
+    mobileCapturedImageData=null;
+    setCameraStatus("Retake the photo when ready.","success");
+}
+
+async function submitCapturedAlertQuick(){
+    if(!mobileCapturedImageData){
+        setCameraStatus("No captured photo found.","error");
+        return;
+    }
+    await submitCommunityPost();
+    const preview=document.getElementById("mobileCapturePreview");
+    if(preview) preview.classList.remove("show");
+    closeLiveCameraFullscreen();
 }
 
 let voiceBusy=false;
@@ -2746,7 +2822,21 @@ async function switchMobileCamera(video){
     if(!isMobileCameraDevice()){
         return false;
     }
+    const currentTrack = videoStream ? videoStream.getVideoTracks()[0] : null;
+    const currentSettings = currentTrack && currentTrack.getSettings ? currentTrack.getSettings() : {};
+    const currentId = currentSettings.deviceId || "";
     mobileFacingMode = mobileFacingMode === "environment" ? "user" : "environment";
+
+    try{
+        if(currentTrack && currentTrack.applyConstraints){
+            await currentTrack.applyConstraints({facingMode:{exact:mobileFacingMode}});
+            await refreshVideoInputs();
+            detectActiveCameraIndex();
+            return true;
+        }
+    }catch(_constraintErr){
+        // continue to next fallback
+    }
 
     // First try by facingMode (most compatible on phones)
     try{
@@ -2761,6 +2851,13 @@ async function switchMobileCamera(video){
                 video:{facingMode:{ideal:mobileFacingMode}},
                 audio:false
             });
+        }
+        const nextTrack = nextStream.getVideoTracks()[0];
+        const nextSettings = nextTrack && nextTrack.getSettings ? nextTrack.getSettings() : {};
+        const nextId = nextSettings.deviceId || "";
+        if(currentId && nextId && currentId === nextId){
+            nextStream.getTracks().forEach((t)=>t.stop());
+            throw new Error("same_camera_returned");
         }
         if(videoStream){
             videoStream.getTracks().forEach((t)=>t.stop());
@@ -2894,6 +2991,10 @@ function stopCamera(){
     }
     if(fsVideo){
         fsVideo.srcObject=null;
+    }
+    const preview=document.getElementById("mobileCapturePreview");
+    if(preview){
+        preview.classList.remove("show");
     }
 }
 </script>
