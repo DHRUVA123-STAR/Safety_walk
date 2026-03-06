@@ -716,7 +716,10 @@
         .mobile-center-score,
         #fullscreenCamControls,
         .mobile-topbar,
-        .mobile-stage {
+        .mobile-stage,
+        .mobile-menu-sheet,
+        #mobileFullscreenVideo,
+        .mobile-cam-subtitle {
             display: none;
         }
 
@@ -777,6 +780,18 @@
             .mobile-top-right {
                 display: inline-flex;
                 gap: 8px;
+            }
+
+            .mobile-theme-btn .mobile-moon {
+                display: none;
+            }
+
+            .dark-mode .mobile-theme-btn .mobile-sun {
+                display: none;
+            }
+
+            .dark-mode .mobile-theme-btn .mobile-moon {
+                display: inline;
             }
 
             .mobile-stage {
@@ -914,7 +929,8 @@
             }
 
             .mobile-quick-sheet,
-            .mobile-lang-sheet {
+            .mobile-lang-sheet,
+            .mobile-menu-sheet {
                 position: fixed;
                 left: 12px;
                 right: 12px;
@@ -929,8 +945,25 @@
 
             .mobile-quick-sheet.show,
             .mobile-lang-sheet.show,
+            .mobile-menu-sheet.show,
             .mobile-center-score.show {
                 display: block;
+            }
+
+            .mobile-history-list {
+                max-height: 220px;
+                overflow-y: auto;
+                color: #dbeafe;
+                font-size: 0.88rem;
+                line-height: 1.35;
+            }
+
+            .mobile-history-item {
+                padding: 8px 10px;
+                margin-bottom: 8px;
+                border-radius: 10px;
+                background: rgba(255,255,255,0.08);
+                border: 1px solid rgba(255,255,255,0.12);
             }
 
             .mobile-sheet-btn {
@@ -1003,19 +1036,15 @@
                 overflow: hidden;
             }
 
-            body.camera-fullscreen-mode #video {
+            body.camera-fullscreen-mode #mobileFullscreenVideo {
                 display: block !important;
-                opacity: 1 !important;
-                transform: none !important;
                 position: fixed;
                 inset: 0;
                 width: 100vw;
                 height: 100vh;
                 object-fit: cover;
                 z-index: 1200;
-                border: none;
-                border-radius: 0;
-                margin: 0;
+                background: #000;
             }
 
             body.camera-fullscreen-mode #fullscreenCamControls {
@@ -1054,8 +1083,25 @@
             body.camera-fullscreen-mode #analyzeBtn,
             body.camera-fullscreen-mode .mobile-chatbar,
             body.camera-fullscreen-mode .mobile-quick-sheet,
-            body.camera-fullscreen-mode .mobile-lang-sheet {
+            body.camera-fullscreen-mode .mobile-lang-sheet,
+            body.camera-fullscreen-mode .mobile-menu-sheet {
                 display: none !important;
+            }
+
+            body.camera-fullscreen-mode .mobile-cam-subtitle {
+                display: block;
+                position: fixed;
+                left: 14px;
+                right: 14px;
+                bottom: 100px;
+                z-index: 1210;
+                text-align: center;
+                color: #f8fafc;
+                font-size: 0.93rem;
+                background: rgba(0,0,0,0.35);
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 12px;
+                padding: 8px 10px;
             }
         }
     </style>
@@ -1066,12 +1112,15 @@
 <div class="container">
 
     <div class="mobile-topbar">
-        <button class="mobile-top-btn" type="button" aria-label="Menu">
+        <button class="mobile-top-btn" type="button" aria-label="Menu" onclick="toggleMobileMenu()">
             <span style="font-size:22px;line-height:1;">≡</span>
         </button>
         <div class="mobile-title-pill">Safety Walk</div>
         <div class="mobile-top-right">
-            <button class="mobile-top-btn" type="button" onclick="toggleTheme()" aria-label="Theme">☼</button>
+            <button class="mobile-top-btn mobile-theme-btn" id="mobileThemeBtn" type="button" onclick="toggleTheme()" aria-label="Theme">
+                <span class="mobile-sun">☀</span>
+                <span class="mobile-moon">☾</span>
+            </button>
             <button class="mobile-top-btn" type="button" onclick="showFeedbackModal()" aria-label="Feedback">💬</button>
         </div>
     </div>
@@ -1278,10 +1327,15 @@
     </div>
 </div>
 
+<div class="mobile-menu-sheet" id="mobileMenuSheet">
+    <p class="mobile-lang-title">Recent Safety Checks</p>
+    <div id="mobileHistoryList" class="mobile-history-list">No history yet.</div>
+</div>
+
 <div class="mobile-chatbar" id="mobileChatBar">
     <button class="mobile-plus-btn" type="button" onclick="toggleMobileQuickSheet()">+</button>
     <button class="mobile-check-btn" type="button" onclick="quickCheckSafety()">Check Safety</button>
-    <button class="mobile-icon-btn" type="button" onclick="toggleMobileLangSheet()" aria-label="Voice language">
+    <button class="mobile-icon-btn" type="button" onclick="handleMobileMic()" aria-label="Voice language">
         <svg viewBox="0 0 24 24">
             <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"></path>
             <path d="M19 11a7 7 0 0 1-14 0"></path>
@@ -1296,6 +1350,9 @@
         </svg>
     </button>
 </div>
+
+<video id="mobileFullscreenVideo" autoplay playsinline muted></video>
+<div id="mobileCamSubtitle" class="mobile-cam-subtitle"></div>
 
 <div id="fullscreenCamControls">
     <button class="fs-cam-btn" type="button" onclick="switchLiveCamera()" aria-label="Switch camera">⟲</button>
@@ -1341,6 +1398,8 @@ const userToken = 'guest-' + Math.random().toString(36).substr(2, 9);
 /* ==================== LANGUAGE SWITCH (NEW FEATURE) ==================== */
 const CURRENT_LANG_KEY = "voice_current_lang";
 let currentVoiceLang = localStorage.getItem(CURRENT_LANG_KEY) || "en";
+const MOBILE_LANG_SELECTED_KEY = "mobile_lang_selected";
+const SAFETY_HISTORY_KEY = "mobile_safety_history";
 
 function switchLanguage(lang) {
     if (!["en","te","hi"].includes(lang)) return;
@@ -1471,11 +1530,45 @@ function updateMobileSnapshot(){
     set("mCrowd", crowdEl ? crowdEl.value : "-");
 }
 
+function getSafetyHistory(){
+    try{
+        const raw=localStorage.getItem(SAFETY_HISTORY_KEY);
+        const parsed=raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    }catch(_err){
+        return [];
+    }
+}
+
+function saveSafetyHistory(entry){
+    const list=getSafetyHistory();
+    list.unshift(entry);
+    const limited=list.slice(0,10);
+    localStorage.setItem(SAFETY_HISTORY_KEY, JSON.stringify(limited));
+}
+
+function renderMobileHistory(){
+    const host=document.getElementById("mobileHistoryList");
+    if(!host) return;
+    const list=getSafetyHistory();
+    if(!list.length){
+        host.innerText="No history yet.";
+        return;
+    }
+    host.innerHTML=list.map((item)=>{
+        return `<div class="mobile-history-item">${item.time} | ${item.level} | Score ${item.score}</div>`;
+    }).join("");
+}
+
 function setCameraStatus(message, type=""){
     const statusEl=document.getElementById("cameraStatus");
     statusEl.className="camera-status";
     if(type) statusEl.classList.add(type);
     statusEl.innerText=message;
+    const subtitle=document.getElementById("mobileCamSubtitle");
+    if(subtitle){
+        subtitle.innerText=message;
+    }
 }
 
 function setActiveCard(option){
@@ -1832,6 +1925,13 @@ function calculateSafety(triggerVoice=false){
     .then(res=>res.json())
     .then(data=>{
         renderScore(data);
+        const now=new Date();
+        saveSafetyHistory({
+            time: now.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}),
+            level: data.safety_level,
+            score: data.score
+        });
+        renderMobileHistory();
         if(triggerVoice){
             speakSafetySummary(currentVoiceLang, data.safety_level, data.score);
         }
@@ -2086,7 +2186,9 @@ function formatVehicleSummary(vehicleMap){
 }
 
 function analyzeScene(mode="autosync"){
-    const video=document.getElementById("video");
+    const video=document.body.classList.contains("camera-fullscreen-mode")
+        ? document.getElementById("mobileFullscreenVideo")
+        : document.getElementById("video");
     if(!videoStream || video.videoWidth===0){
         setCameraStatus("Open camera first so analysis can capture a valid frame.","error");
         return;
@@ -2125,10 +2227,12 @@ function analyzeScene(mode="autosync"){
 
         if(mode==="vehicle"){
             setCameraStatus(`Vehicle AI detected ${data.vehicle_count} vehicle(s) [${vehicleSummary}]. ${apiMsg}.`,"success");
+            speakTextInLanguage(currentVoiceLang, `Vehicle analysis complete. Detected ${data.vehicle_count} vehicles.`);
             return;
         }
         if(mode==="crowd"){
             setCameraStatus(`Crowd CV detected ${data.crowd_count} people -> ${data.crowd} crowd. Lighting: ${data.lighting}.`,"success");
+            speakTextInLanguage(currentVoiceLang, `Crowd analysis complete. Crowd is ${data.crowd}.`);
             return;
         }
 
@@ -2137,6 +2241,7 @@ function analyzeScene(mode="autosync"){
         .then((scoreData)=>{
             stopCamera();
             setCameraStatus(`Auto Sync complete. Safety Level: ${scoreData.safety_level}, Score: ${scoreData.score}.`,"success");
+            speakSafetySummary(currentVoiceLang, scoreData.safety_level, scoreData.score);
         })
         .catch(()=>{
             setCameraStatus("Auto Sync score update failed. Please try again.","error");
@@ -2151,6 +2256,7 @@ function analyzeScene(mode="autosync"){
 window.addEventListener("load", function(){
     initVoices();
     updateMobileSnapshot();
+    renderMobileHistory();
 
     // Set initial active language button
     document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -2231,24 +2337,41 @@ let mobileScoreTimer=null;
 function closeMobileSheets(){
     const quick=document.getElementById("mobileQuickSheet");
     const lang=document.getElementById("mobileLangSheet");
+    const menu=document.getElementById("mobileMenuSheet");
     if(quick) quick.classList.remove("show");
     if(lang) lang.classList.remove("show");
+    if(menu) menu.classList.remove("show");
 }
 
 function toggleMobileQuickSheet(){
     const quick=document.getElementById("mobileQuickSheet");
     const lang=document.getElementById("mobileLangSheet");
+    const menu=document.getElementById("mobileMenuSheet");
     if(!quick) return;
     quick.classList.toggle("show");
     if(lang) lang.classList.remove("show");
+    if(menu) menu.classList.remove("show");
 }
 
 function toggleMobileLangSheet(){
     const quick=document.getElementById("mobileQuickSheet");
     const lang=document.getElementById("mobileLangSheet");
+    const menu=document.getElementById("mobileMenuSheet");
     if(!lang) return;
     lang.classList.toggle("show");
     if(quick) quick.classList.remove("show");
+    if(menu) menu.classList.remove("show");
+}
+
+function toggleMobileMenu(){
+    const quick=document.getElementById("mobileQuickSheet");
+    const lang=document.getElementById("mobileLangSheet");
+    const menu=document.getElementById("mobileMenuSheet");
+    if(!menu) return;
+    renderMobileHistory();
+    menu.classList.toggle("show");
+    if(quick) quick.classList.remove("show");
+    if(lang) lang.classList.remove("show");
 }
 
 function quickUploadPhoto(){
@@ -2282,14 +2405,31 @@ function quickCheckSafety(){
 
 function mobileChooseLanguage(lang){
     switchLanguage(lang);
+    localStorage.setItem(MOBILE_LANG_SELECTED_KEY, "true");
     closeMobileSheets();
     startVoice();
+}
+
+function handleMobileMic(){
+    closeMobileSheets();
+    const selected = localStorage.getItem(MOBILE_LANG_SELECTED_KEY) === "true";
+    if(selected){
+        startVoice();
+        return;
+    }
+    const lang=document.getElementById("mobileLangSheet");
+    if(lang) lang.classList.add("show");
 }
 
 async function openLiveCameraFullscreen(){
     closeMobileSheets();
     const opened=await openCamera(false);
     if(!opened) return;
+    const fsVideo=document.getElementById("mobileFullscreenVideo");
+    if(fsVideo){
+        fsVideo.srcObject=videoStream;
+        await waitForVideoReady(fsVideo);
+    }
     document.body.classList.add("camera-fullscreen-mode");
 }
 
@@ -2299,7 +2439,13 @@ function closeLiveCameraFullscreen(){
 }
 
 async function switchLiveCamera(){
-    await openCamera(true);
+    const switched=await openCamera(true);
+    if(!switched) return;
+    const fsVideo=document.getElementById("mobileFullscreenVideo");
+    if(fsVideo){
+        fsVideo.srcObject=videoStream;
+        await waitForVideoReady(fsVideo);
+    }
 }
 
 let voiceBusy=false;
@@ -2437,6 +2583,8 @@ async function openCamera(allowSwitch=false){
             try{
                 const switched=await switchMobileCamera(video);
                 if(switched){
+                    const fsVideo=document.getElementById("mobileFullscreenVideo");
+                    if(fsVideo) fsVideo.srcObject=videoStream;
                     setCameraStatus("Camera switched.","success");
                 }
                 return switched || true;
@@ -2476,6 +2624,8 @@ async function openCamera(allowSwitch=false){
         }
         videoStream=stream;
         video.srcObject=stream;
+        const fsVideo=document.getElementById("mobileFullscreenVideo");
+        if(fsVideo) fsVideo.srcObject=stream;
         await refreshVideoInputs();
         detectActiveCameraIndex();
         setCameraStatus(mobile ? "Camera opened (back camera preferred)." : "Camera opened successfully.","success");
@@ -2493,6 +2643,7 @@ async function openCamera(allowSwitch=false){
 
 function stopCamera(){
     const video=document.getElementById("video");
+    const fsVideo=document.getElementById("mobileFullscreenVideo");
     const analyzeBtn=document.getElementById("analyzeBtn");
     const closeCameraBtn=document.getElementById("closeCameraBtn");
     const cameraPanel=document.getElementById("cameraPanel");
@@ -2507,6 +2658,9 @@ function stopCamera(){
     if(videoStream){
         videoStream.getTracks().forEach(track=>track.stop());
         videoStream=null;
+    }
+    if(fsVideo){
+        fsVideo.srcObject=null;
     }
 }
 </script>
