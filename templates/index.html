@@ -1024,6 +1024,29 @@
                 gap: 8px;
             }
 
+            .mobile-community-actions .mobile-sheet-btn {
+                margin: 0;
+                text-align: center;
+                color: #0f172a;
+                background: #eaf2ff;
+                border: 1px solid #b8c8dd;
+            }
+
+            .mobile-community-status {
+                margin-top: 8px;
+                font-size: 0.84rem;
+                color: #0f766e;
+            }
+
+            .mobile-feed-list {
+                margin-top: 10px;
+                max-height: 210px;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
             .mobile-history-list {
                 max-height: 220px;
                 overflow-y: auto;
@@ -1203,6 +1226,16 @@
             .dark-mode .mobile-stage-note,
             .dark-mode .mobile-community-card p { color: #c7d2e0; }
 
+            .dark-mode .mobile-community-actions .mobile-sheet-btn {
+                color: #f8fafc;
+                background: #1f2937;
+                border-color: #374151;
+            }
+
+            .dark-mode .mobile-community-status {
+                color: #86efac;
+            }
+
             .dark-mode .mobile-chatbar {
                 background: rgba(9, 14, 24, 0.92);
                 border-color: rgba(255,255,255,0.14);
@@ -1314,6 +1347,8 @@
                     <button type="button" class="mobile-sheet-btn" onclick="quickUploadPhoto()">Upload Photo</button>
                     <button type="button" class="mobile-sheet-btn" onclick="submitCommunityPost()">Submit Alert</button>
                 </div>
+                <div class="mobile-community-status" id="mobileCommunityStatus"></div>
+                <div class="mobile-feed-list" id="mobileCommunityFeed"></div>
             </div>
         </div>
     </div>
@@ -1450,6 +1485,7 @@
                     </button>
 
                     <div class="community-status" id="communityStatus"></div>
+                    <div class="feed-list" id="communityFeed"></div>
                 </div>
             </div>
         </div>
@@ -1512,7 +1548,10 @@
 <aside class="mobile-menu-sheet" id="mobileMenuSheet">
     <div class="mobile-menu-head">
         <strong>History</strong>
-        <button type="button" class="mobile-menu-close" onclick="closeMobileMenu()">×</button>
+        <div style="display:flex; gap:8px;">
+            <button type="button" class="mobile-menu-close" onclick="clearAllHistory()" title="Clear all">🗑</button>
+            <button type="button" class="mobile-menu-close" onclick="closeMobileMenu()">×</button>
+        </div>
     </div>
     <div id="mobileHistoryList" class="mobile-history-list">No history yet.</div>
 </aside>
@@ -1764,9 +1803,77 @@ function renderMobileHistory(){
         host.innerText="No history yet.";
         return;
     }
-    host.innerHTML=list.map((item)=>{
-        return `<div class="mobile-history-item">${item.time} | ${item.level} | Score ${item.score}</div>`;
-    }).join("");
+    host.innerHTML="";
+    list.forEach((item, index)=>{
+        const row=document.createElement("div");
+        row.className="mobile-history-item";
+        row.style.display="flex";
+        row.style.alignItems="center";
+        row.style.justifyContent="space-between";
+        row.style.gap="10px";
+        row.style.cursor="pointer";
+        row.onclick=()=>openHistoryEntry(index);
+
+        const text=document.createElement("div");
+        text.style.flex="1";
+        text.innerText=`${item.time} | ${item.level} | Score ${item.score}`;
+
+        const del=document.createElement("button");
+        del.type="button";
+        del.innerText="Delete";
+        del.style.border="1px solid rgba(255,255,255,0.28)";
+        del.style.background="rgba(255,255,255,0.08)";
+        del.style.color="#fff";
+        del.style.borderRadius="999px";
+        del.style.padding="4px 10px";
+        del.style.fontSize="12px";
+        del.onclick=(e)=>{
+            e.stopPropagation();
+            deleteHistoryEntry(index);
+        };
+
+        row.appendChild(text);
+        row.appendChild(del);
+        host.appendChild(row);
+    });
+}
+
+function openHistoryEntry(index){
+    const list=getSafetyHistory();
+    const item=list[index];
+    if(!item) return;
+
+    const areaEl=document.getElementById("area");
+    const lightingEl=document.getElementById("lighting");
+    const trafficEl=document.getElementById("traffic");
+    const crowdEl=document.getElementById("crowd");
+    if(areaEl && item.area) areaEl.value=item.area;
+    if(lightingEl && item.lighting) lightingEl.value=item.lighting;
+    if(trafficEl && item.traffic) trafficEl.value=item.traffic;
+    if(crowdEl && item.crowd) crowdEl.value=item.crowd;
+    updateMobileSnapshot();
+
+    const note=document.getElementById("mobileStageNote");
+    if(note){
+        note.innerText=`${item.time} | ${item.level} | Score ${item.score} | ${item.area || "-"}, ${item.lighting || "-"}, ${item.traffic || "-"}, ${item.crowd || "-"}`;
+    }
+    showMobileScoreCenter(item.level, item.score);
+    setCameraStatus(`History loaded: ${item.level}, score ${item.score}.`, "success");
+    closeMobileMenu();
+}
+
+function deleteHistoryEntry(index){
+    const list=getSafetyHistory();
+    if(index < 0 || index >= list.length) return;
+    list.splice(index, 1);
+    localStorage.setItem(SAFETY_HISTORY_KEY, JSON.stringify(list));
+    renderMobileHistory();
+}
+
+function clearAllHistory(){
+    localStorage.setItem(SAFETY_HISTORY_KEY, JSON.stringify([]));
+    renderMobileHistory();
+    setCameraStatus("History cleared.", "success");
 }
 
 function setCameraStatus(message, type=""){
@@ -2160,7 +2267,11 @@ function calculateSafety(triggerVoice=false){
         saveSafetyHistory({
             time: now.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}),
             level: data.safety_level,
-            score: data.score
+            score: data.score,
+            area: document.getElementById("area").value,
+            lighting: document.getElementById("lighting").value,
+            traffic: document.getElementById("traffic").value,
+            crowd: document.getElementById("crowd").value
         });
         renderMobileHistory();
         if(triggerVoice){
@@ -2180,8 +2291,15 @@ function fetchExternalTraffic(lat, lon){
 
 function setCommunityStatus(message,isError=false){
     const el=document.getElementById("communityStatus");
-    el.style.color=isError ? "#dc2626" : "#0f766e";
-    el.innerText=message;
+    if(el){
+        el.style.color=isError ? "#dc2626" : "#0f766e";
+        el.innerText=message;
+    }
+    const mobileEl=document.getElementById("mobileCommunityStatus");
+    if(mobileEl){
+        mobileEl.style.color=isError ? "#dc2626" : "";
+        mobileEl.innerText=message;
+    }
 }
 
 function fileToDataUrl(file){
@@ -2203,37 +2321,41 @@ function timeAgo(iso){
 }
 
 function renderCommunityFeed(posts){
-    const feed=document.getElementById("communityFeed");
-    feed.innerHTML="";
+    const renderInto=(feed)=>{
+        if(!feed) return;
+        feed.innerHTML="";
+        posts.forEach((post)=>{
+            const card=document.createElement("div");
+            card.className="feed-item";
+            card.innerHTML = `
+                <strong>${post.tag}</strong>
+                <div class="community-meta">${timeAgo(post.created_at)} | (${post.lat.toFixed(5)}, ${post.lon.toFixed(5)})</div>
+                <div>${post.note || ""}</div>
+                <img class="feed-img" src="${post.image_url}" alt="community post">
+        
+                <div class="reaction-row">
+                    <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Avoid')">Avoid (${post.reactions['Avoid']})</button>
+                    <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Careful')">Careful (${post.reactions['Careful']})</button>
+                    <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Safe now')">Safe now (${post.reactions['Safe now']})</button>
+                </div>
 
-    posts.forEach((post)=>{
-        const card=document.createElement("div");
-        card.className="feed-item";
-        card.innerHTML = `
-            <strong>${post.tag}</strong>
-            <div class="community-meta">${timeAgo(post.created_at)} | (${post.lat.toFixed(5)}, ${post.lon.toFixed(5)})</div>
-            <div>${post.note || ""}</div>
-            <img class="feed-img" src="${post.image_url}" alt="community post">
-    
-            <div class="reaction-row">
-                <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Avoid')">Avoid (${post.reactions['Avoid']})</button>
-                <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Careful')">Careful (${post.reactions['Careful']})</button>
-                <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Safe now')">Safe now (${post.reactions['Safe now']})</button>
-            </div>
+                <div class="helpful-row">
+                    Was this helpful?
+                    <button class="helpful-btn yes" onclick="sendHelpful(${post.id}, true)">Yes</button>
+                    <button class="helpful-btn no"  onclick="sendHelpful(${post.id}, false)">No</button>
+                    <span id="helpful-status-${post.id}"></span>
+                </div>
+            `;
+            feed.appendChild(card);
+        });
 
-            <div class="helpful-row">
-                Was this helpful?
-                <button class="helpful-btn yes" onclick="sendHelpful(${post.id}, true)">Yes</button>
-                <button class="helpful-btn no"  onclick="sendHelpful(${post.id}, false)">No</button>
-                <span id="helpful-status-${post.id}"></span>
-            </div>
-`       ;
-        feed.appendChild(card);
-    });
+        if(!posts.length){
+            feed.innerHTML="<div class='community-meta'>No community alerts yet.</div>";
+        }
+    };
 
-    if(!posts.length){
-        feed.innerHTML="<div class='community-meta'>No community alerts yet.</div>";
-    }
+    renderInto(document.getElementById("communityFeed"));
+    renderInto(document.getElementById("mobileCommunityFeed"));
 }
 
 async function sendHelpful(postId, isHelpful) {
@@ -2357,12 +2479,16 @@ async function submitCommunityPost(){
     setCommunityStatus("Uploading community alert...");
     try{
         const imageData=file ? await fileToDataUrl(file) : mobileCapturedImageData;
+        const noteEl=document.getElementById("communityNote");
+        if(noteEl && !noteEl.value.trim() && mobileCapturedImageData){
+            noteEl.value="Captured from mobile camera.";
+        }
         const payload={
             image:imageData,
             lat:currentLat,
             lon:currentLon,
             tag:document.getElementById("communityTag").value,
-            note:document.getElementById("communityNote").value.trim()
+            note:(noteEl ? noteEl.value : "").trim()
         };
         const res=await fetch("/community-posts",{
             method:"POST",
