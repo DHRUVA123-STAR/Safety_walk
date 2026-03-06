@@ -714,23 +714,145 @@
         .mobile-quick-sheet,
         .mobile-lang-sheet,
         .mobile-center-score,
-        #fullscreenCamControls {
+        #fullscreenCamControls,
+        .mobile-topbar,
+        .mobile-stage {
             display: none;
         }
 
         @media (max-width: 768px) {
+            html, body {
+                height: 100%;
+                overflow: hidden;
+            }
+
+            body {
+                background: #05070b !important;
+            }
+
+            .container {
+                width: 100%;
+                height: 100dvh;
+                max-width: none;
+                margin: 0;
+                border-radius: 0;
+                padding: 10px 12px 110px;
+                box-shadow: none;
+                background: #05070b;
+                color: #f8fafc;
+                overflow: hidden;
+            }
+
+            .mobile-topbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                margin-bottom: 14px;
+            }
+
+            .mobile-top-btn {
+                width: 48px;
+                height: 48px;
+                border-radius: 999px;
+                border: 1px solid rgba(255,255,255,0.2);
+                background: #161b24;
+                color: #fff;
+                font-size: 18px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .mobile-title-pill {
+                padding: 11px 16px;
+                border-radius: 999px;
+                background: #161b24;
+                border: 1px solid rgba(255,255,255,0.2);
+                font-size: 1.45rem;
+                font-weight: 700;
+                letter-spacing: 0.01em;
+            }
+
+            .mobile-top-right {
+                display: inline-flex;
+                gap: 8px;
+            }
+
+            .mobile-stage {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: calc(100dvh - 190px);
+            }
+
+            .mobile-stage-card {
+                width: 100%;
+                max-width: 430px;
+                border-radius: 18px;
+                background: #0f131b;
+                border: 1px solid rgba(255,255,255,0.12);
+                padding: 16px;
+            }
+
+            .mobile-stage-title {
+                font-size: 1.15rem;
+                font-weight: 700;
+                margin-bottom: 12px;
+            }
+
+            .mobile-stage-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+
+            .mobile-stage-grid div {
+                background: #1a202c;
+                border: 1px solid rgba(255,255,255,0.12);
+                border-radius: 12px;
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .mobile-stage-grid span {
+                font-size: 0.8rem;
+                color: #9fb0c4;
+            }
+
+            .mobile-stage-grid strong {
+                font-size: 1rem;
+                color: #eef4ff;
+            }
+
+            .mobile-stage-note {
+                margin-top: 12px;
+                color: #c7d2e0;
+                font-size: 0.9rem;
+            }
+
             .container {
                 padding-bottom: 108px;
             }
 
-            .header .icons {
+            .header {
                 display: none;
             }
 
-            .header h2 {
-                font-size: 2rem;
-                line-height: 1.08;
-                letter-spacing: 0.01em;
+            .content-grid {
+                position: absolute !important;
+                width: 1px !important;
+                height: 1px !important;
+                overflow: hidden !important;
+                clip: rect(0 0 0 0) !important;
+                clip-path: inset(50%) !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: 0 !important;
+                left: -9999px !important;
+                top: -9999px !important;
             }
 
             .mobile-chatbar {
@@ -899,42 +1021,37 @@
             body.camera-fullscreen-mode #fullscreenCamControls {
                 display: flex;
                 position: fixed;
-                top: 14px;
-                right: 14px;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 26px;
                 z-index: 1210;
-                gap: 10px;
+                gap: 12px;
             }
 
             .fs-cam-btn {
-                width: 44px;
-                height: 44px;
+                width: 48px;
+                height: 48px;
                 border-radius: 999px;
                 border: 1px solid rgba(255, 255, 255, 0.3);
                 background: rgba(0, 0, 0, 0.45);
                 color: #fff;
                 font-weight: 800;
-                font-size: 20px;
+                font-size: 24px;
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
             }
 
-            body.camera-fullscreen-mode #analyzeBtn {
-                display: block !important;
-                position: fixed;
-                left: 16px;
-                right: 16px;
-                bottom: 92px;
-                z-index: 1210;
-                border-radius: 999px;
+            .fs-capture-btn {
+                width: 60px;
+                height: 60px;
+                background: #ffffff;
+                color: #111827;
+                border-color: #dbeafe;
+                font-size: 30px;
             }
 
-            body.camera-fullscreen-mode #closeCameraBtn,
-            body.camera-fullscreen-mode .camera-title,
-            body.camera-fullscreen-mode .camera-subtitle,
-            body.camera-fullscreen-mode .camera-functions,
-            body.camera-fullscreen-mode .camera-status,
-            body.camera-fullscreen-mode #map,
+            body.camera-fullscreen-mode #analyzeBtn,
             body.camera-fullscreen-mode .mobile-chatbar,
             body.camera-fullscreen-mode .mobile-quick-sheet,
             body.camera-fullscreen-mode .mobile-lang-sheet {
@@ -947,6 +1064,30 @@
 <body>
 
 <div class="container">
+
+    <div class="mobile-topbar">
+        <button class="mobile-top-btn" type="button" aria-label="Menu">
+            <span style="font-size:22px;line-height:1;">≡</span>
+        </button>
+        <div class="mobile-title-pill">Safety Walk</div>
+        <div class="mobile-top-right">
+            <button class="mobile-top-btn" type="button" onclick="toggleTheme()" aria-label="Theme">☼</button>
+            <button class="mobile-top-btn" type="button" onclick="showFeedbackModal()" aria-label="Feedback">💬</button>
+        </div>
+    </div>
+
+    <div class="mobile-stage" id="mobileStage">
+        <div class="mobile-stage-card">
+            <div class="mobile-stage-title">Community Safety</div>
+            <div class="mobile-stage-grid">
+                <div><span>Area</span><strong id="mArea">-</strong></div>
+                <div><span>Lighting</span><strong id="mLighting">-</strong></div>
+                <div><span>Traffic</span><strong id="mTraffic">-</strong></div>
+                <div><span>Crowd</span><strong id="mCrowd">-</strong></div>
+            </div>
+            <div class="mobile-stage-note" id="mobileStageNote">Tap Check Safety to calculate live score.</div>
+        </div>
+    </div>
 
     <div class="header">
         <h2>Community Safety Walk Audit</h2>
@@ -1157,7 +1298,8 @@
 </div>
 
 <div id="fullscreenCamControls">
-    <button class="fs-cam-btn" type="button" onclick="switchLiveCamera()" aria-label="Switch camera">↕</button>
+    <button class="fs-cam-btn" type="button" onclick="switchLiveCamera()" aria-label="Switch camera">⟲</button>
+    <button class="fs-cam-btn fs-capture-btn" type="button" onclick="analyzeScene('autosync')" aria-label="Analyze">●</button>
     <button class="fs-cam-btn" type="button" onclick="closeLiveCameraFullscreen()" aria-label="Close camera">×</button>
 </div>
 
@@ -1314,6 +1456,21 @@ function getFormValues(){
     };
 }
 
+function updateMobileSnapshot(){
+    const set=(id,val)=>{
+        const el=document.getElementById(id);
+        if(el) el.innerText=val;
+    };
+    const areaEl=document.getElementById("area");
+    const lightingEl=document.getElementById("lighting");
+    const trafficEl=document.getElementById("traffic");
+    const crowdEl=document.getElementById("crowd");
+    set("mArea", areaEl ? areaEl.value : "-");
+    set("mLighting", lightingEl ? lightingEl.value : "-");
+    set("mTraffic", trafficEl ? trafficEl.value : "-");
+    set("mCrowd", crowdEl ? crowdEl.value : "-");
+}
+
 function setCameraStatus(message, type=""){
     const statusEl=document.getElementById("cameraStatus");
     statusEl.className="camera-status";
@@ -1378,6 +1535,7 @@ function renderScore(data){
         li.innerText=reason;
         reasonList.appendChild(li);
     });
+    updateMobileSnapshot();
 }
 
 function normalizeSpeechText(text){
@@ -1958,6 +2116,7 @@ function analyzeScene(mode="autosync"){
         document.getElementById("crowd").value=data.crowd;
         document.getElementById("traffic").value=data.traffic;
         document.getElementById("vehicleCount").value=data.vehicle_count;
+        updateMobileSnapshot();
 
         const vehicleSummary=formatVehicleSummary(data.vehicles_by_type);
         const apiMsg=data.traffic_api && data.traffic_api.available
@@ -1991,6 +2150,7 @@ function analyzeScene(mode="autosync"){
 // ==================== MAIN INIT + VOICE START ====================
 window.addEventListener("load", function(){
     initVoices();
+    updateMobileSnapshot();
 
     // Set initial active language button
     document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -2010,6 +2170,13 @@ window.addEventListener("load", function(){
         .catch(()=>{
             setCameraStatus("Score calculation failed. Please try again.","error");
         });
+    });
+
+    ["area","lighting","traffic","crowd"].forEach((id)=>{
+        const el=document.getElementById(id);
+        if(el){
+            el.addEventListener("change", updateMobileSnapshot);
+        }
     });
 });
 
@@ -2032,12 +2199,14 @@ navigator.geolocation.getCurrentPosition(function(position){
     .then(res=>res.json())
     .then(data=>{
         document.getElementById("area").value=data.area;
+        updateMobileSnapshot();
     });
 
     fetchExternalTraffic(lat,lon)
     .then((trafficData)=>{
         if(trafficData.available && trafficData.traffic){
             document.getElementById("traffic").value=trafficData.traffic;
+            updateMobileSnapshot();
             setCameraStatus(`External traffic integrated from ${trafficData.provider}: ${trafficData.traffic}.`,"success");
         }else{
             setCameraStatus(`External traffic API not active (${trafficData.message || "unknown"}).`,"error");
@@ -2102,6 +2271,8 @@ function quickCheckSafety(){
     calculateSafety()
     .then((data)=>{
         showMobileScoreCenter(data.safety_level, data.score);
+        const note=document.getElementById("mobileStageNote");
+        if(note) note.innerText=`Safety Level: ${data.safety_level} | Score: ${data.score}`;
         setCameraStatus("Safety score updated from quick action.","success");
     })
     .catch(()=>{
@@ -2205,10 +2376,18 @@ async function switchMobileCamera(video){
 
     // First try by facingMode (most compatible on phones)
     try{
-        const nextStream=await navigator.mediaDevices.getUserMedia({
-            video:{facingMode:{ideal:mobileFacingMode}},
-            audio:false
-        });
+        let nextStream=null;
+        try{
+            nextStream=await navigator.mediaDevices.getUserMedia({
+                video:{facingMode:{exact:mobileFacingMode}},
+                audio:false
+            });
+        }catch(_exactErr){
+            nextStream=await navigator.mediaDevices.getUserMedia({
+                video:{facingMode:{ideal:mobileFacingMode}},
+                audio:false
+            });
+        }
         if(videoStream){
             videoStream.getTracks().forEach((t)=>t.stop());
         }
@@ -2263,7 +2442,7 @@ async function openCamera(allowSwitch=false){
                 return switched || true;
             }catch(_err){
                 setCameraStatus("Unable to switch camera.","error");
-                return true;
+                return false;
             }
         }
         return true;
@@ -2278,10 +2457,17 @@ async function openCamera(allowSwitch=false){
         let stream=null;
         if(mobile){
             try{
-                stream=await navigator.mediaDevices.getUserMedia({
-                    video:{facingMode:{ideal:mobileFacingMode}},
-                    audio:false
-                });
+                try{
+                    stream=await navigator.mediaDevices.getUserMedia({
+                        video:{facingMode:{exact:mobileFacingMode}},
+                        audio:false
+                    });
+                }catch(_exactInitialErr){
+                    stream=await navigator.mediaDevices.getUserMedia({
+                        video:{facingMode:{ideal:mobileFacingMode}},
+                        audio:false
+                    });
+                }
             }catch(_mobileErr){
                 stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
             }
