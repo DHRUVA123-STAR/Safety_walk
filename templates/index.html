@@ -718,6 +718,8 @@
         .mobile-topbar,
         .mobile-stage,
         .mobile-menu-sheet,
+        .mobile-menu-overlay,
+        .mobile-community-card,
         #mobileFullscreenVideo,
         .mobile-cam-subtitle {
             display: none;
@@ -729,10 +731,6 @@
                 overflow: hidden;
             }
 
-            body {
-                background: #05070b !important;
-            }
-
             .container {
                 width: 100%;
                 height: 100dvh;
@@ -741,9 +739,18 @@
                 border-radius: 0;
                 padding: 10px 12px 110px;
                 box-shadow: none;
-                background: #05070b;
-                color: #f8fafc;
+                background: transparent;
+                color: #0f172a;
                 overflow: hidden;
+            }
+
+            body {
+                background: linear-gradient(135deg,#4e73df,#1cc88a) !important;
+            }
+
+            .dark-mode {
+                background: linear-gradient(135deg,#05070b,#0b1220) !important;
+                color: #f8fafc;
             }
 
             .mobile-topbar {
@@ -758,9 +765,9 @@
                 width: 48px;
                 height: 48px;
                 border-radius: 999px;
-                border: 1px solid rgba(255,255,255,0.2);
-                background: #161b24;
-                color: #fff;
+                border: 1px solid rgba(15,23,42,0.18);
+                background: rgba(255,255,255,0.9);
+                color: #0f172a;
                 font-size: 18px;
                 display: inline-flex;
                 align-items: center;
@@ -770,11 +777,12 @@
             .mobile-title-pill {
                 padding: 11px 16px;
                 border-radius: 999px;
-                background: #161b24;
-                border: 1px solid rgba(255,255,255,0.2);
+                background: rgba(255,255,255,0.9);
+                border: 1px solid rgba(15,23,42,0.18);
                 font-size: 1.45rem;
                 font-weight: 700;
                 letter-spacing: 0.01em;
+                color: #0f172a;
             }
 
             .mobile-top-right {
@@ -805,8 +813,8 @@
                 width: 100%;
                 max-width: 430px;
                 border-radius: 18px;
-                background: #0f131b;
-                border: 1px solid rgba(255,255,255,0.12);
+                background: rgba(255,255,255,0.94);
+                border: 1px solid rgba(15,23,42,0.14);
                 padding: 16px;
             }
 
@@ -823,8 +831,8 @@
             }
 
             .mobile-stage-grid div {
-                background: #1a202c;
-                border: 1px solid rgba(255,255,255,0.12);
+                background: rgba(239,246,255,0.9);
+                border: 1px solid rgba(15,23,42,0.14);
                 border-radius: 12px;
                 padding: 10px;
                 display: flex;
@@ -834,17 +842,17 @@
 
             .mobile-stage-grid span {
                 font-size: 0.8rem;
-                color: #9fb0c4;
+                color: #475569;
             }
 
             .mobile-stage-grid strong {
                 font-size: 1rem;
-                color: #eef4ff;
+                color: #0f172a;
             }
 
             .mobile-stage-note {
                 margin-top: 12px;
-                color: #c7d2e0;
+                color: #334155;
                 font-size: 0.9rem;
             }
 
@@ -881,8 +889,8 @@
                 z-index: 1100;
                 padding: 10px;
                 border-radius: 999px;
-                background: rgba(9, 14, 24, 0.92);
-                border: 1px solid rgba(255, 255, 255, 0.14);
+                background: rgba(255,255,255,0.92);
+                border: 1px solid rgba(15,23,42,0.14);
                 box-shadow: 0 16px 32px rgba(0, 0, 0, 0.34);
             }
 
@@ -899,9 +907,9 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                background: #20252e;
-                color: #ffffff;
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(241,245,249,0.95);
+                color: #0f172a;
+                border: 1px solid rgba(15,23,42,0.18);
                 font-size: 22px;
                 flex: 0 0 auto;
             }
@@ -909,7 +917,7 @@
             .mobile-icon-btn svg {
                 width: 21px;
                 height: 21px;
-                stroke: #ffffff;
+                stroke: #0f172a;
                 fill: none;
                 stroke-width: 2;
                 stroke-linecap: round;
@@ -948,6 +956,68 @@
             .mobile-menu-sheet.show,
             .mobile-center-score.show {
                 display: block;
+            }
+
+            .mobile-menu-sheet {
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: auto;
+                width: min(84vw, 340px);
+                border-radius: 0 16px 16px 0;
+                z-index: 1160;
+            }
+
+            .mobile-menu-overlay.show {
+                display: block;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.35);
+                z-index: 1150;
+            }
+
+            .mobile-menu-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 10px;
+                color: #e2e8f0;
+            }
+
+            .mobile-menu-close {
+                width: 34px;
+                height: 34px;
+                border-radius: 999px;
+                border: 1px solid rgba(255,255,255,0.25);
+                background: rgba(255,255,255,0.08);
+                color: #fff;
+                font-size: 20px;
+            }
+
+            .mobile-community-card {
+                display: block;
+                margin-top: 12px;
+                border-radius: 14px;
+                padding: 12px;
+                background: rgba(255,255,255,0.92);
+                border: 1px solid rgba(15,23,42,0.14);
+            }
+
+            .mobile-community-card h4 {
+                margin: 0 0 4px;
+                color: #0f172a;
+            }
+
+            .mobile-community-card p {
+                margin: 0 0 10px;
+                font-size: 0.84rem;
+                color: #475569;
+            }
+
+            .mobile-community-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
             }
 
             .mobile-history-list {
@@ -1072,12 +1142,13 @@
             }
 
             .fs-capture-btn {
-                width: 60px;
+                width: 88px;
                 height: 60px;
-                background: #ffffff;
-                color: #111827;
+                background: linear-gradient(135deg, #2575fc 0%, #1fc3d6 100%);
+                color: #ffffff;
                 border-color: #dbeafe;
-                font-size: 30px;
+                font-size: 17px;
+                font-weight: 700;
             }
 
             body.camera-fullscreen-mode #analyzeBtn,
@@ -1103,6 +1174,62 @@
                 border-radius: 12px;
                 padding: 8px 10px;
             }
+
+            .dark-mode .mobile-top-btn,
+            .dark-mode .mobile-title-pill {
+                background: #161b24;
+                color: #fff;
+                border-color: rgba(255,255,255,0.2);
+            }
+
+            .dark-mode .mobile-stage-card,
+            .dark-mode .mobile-community-card {
+                background: #0f131b;
+                border-color: rgba(255,255,255,0.12);
+                color: #f8fafc;
+            }
+
+            .dark-mode .mobile-stage-grid div {
+                background: #1a202c;
+                border-color: rgba(255,255,255,0.12);
+            }
+
+            .dark-mode .mobile-stage-grid span { color: #9fb0c4; }
+            .dark-mode .mobile-stage-grid strong { color: #eef4ff; }
+            .dark-mode .mobile-stage-note,
+            .dark-mode .mobile-community-card p { color: #c7d2e0; }
+
+            .dark-mode .mobile-chatbar {
+                background: rgba(9, 14, 24, 0.92);
+                border-color: rgba(255,255,255,0.14);
+            }
+
+            .dark-mode .mobile-plus-btn,
+            .dark-mode .mobile-icon-btn {
+                background: #20252e;
+                color: #fff;
+                border-color: rgba(255,255,255,0.2);
+            }
+
+            .dark-mode .mobile-icon-btn svg { stroke: #fff; }
+        }
+
+        #feedbackModal .feedback-modal-content {
+            background: #ffffff;
+            color: #0f172a;
+        }
+
+        .dark-mode #feedbackModal .feedback-modal-content {
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid rgba(255,255,255,0.16);
+        }
+
+        .dark-mode #feedbackModal select,
+        .dark-mode #feedbackModal textarea {
+            background: #111827;
+            color: #e2e8f0;
+            border: 1px solid #334155;
         }
     </style>
 </head>
@@ -1315,27 +1442,40 @@
 
 <div class="mobile-quick-sheet" id="mobileQuickSheet">
     <button class="mobile-sheet-btn" type="button" onclick="quickUploadPhoto()">Upload Photo</button>
-    <button class="mobile-sheet-btn" type="button" onclick="openLiveCameraFullscreen()">Open Camera</button>
+    <button class="mobile-sheet-btn" type="button" onclick="openCaptureCameraFullscreen()">Open Camera</button>
 </div>
 
 <div class="mobile-lang-sheet" id="mobileLangSheet">
     <p class="mobile-lang-title">Choose Voice Language</p>
     <div class="mobile-lang-grid">
         <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('en')">English</button>
-        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('te')">Telugu</button>
-        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('hi')">Hindi</button>
+        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('te')">తెలుగు</button>
+        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('hi')">हिन्दी</button>
     </div>
 </div>
 
-<div class="mobile-menu-sheet" id="mobileMenuSheet">
-    <p class="mobile-lang-title">Recent Safety Checks</p>
+<div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="closeMobileMenu()"></div>
+<aside class="mobile-menu-sheet" id="mobileMenuSheet">
+    <div class="mobile-menu-head">
+        <strong>History</strong>
+        <button type="button" class="mobile-menu-close" onclick="closeMobileMenu()">×</button>
+    </div>
     <div id="mobileHistoryList" class="mobile-history-list">No history yet.</div>
+</aside>
+
+<div class="mobile-community-card" id="mobileCommunityCard">
+    <h4>Community Alert</h4>
+    <p>Share captured/uploaded hazard with nearby users.</p>
+    <div class="mobile-community-actions">
+        <button type="button" class="mobile-sheet-btn" onclick="quickUploadPhoto()">Upload Photo</button>
+        <button type="button" class="mobile-sheet-btn" onclick="submitCommunityPost()">Submit Alert</button>
+    </div>
 </div>
 
 <div class="mobile-chatbar" id="mobileChatBar">
     <button class="mobile-plus-btn" type="button" onclick="toggleMobileQuickSheet()">+</button>
     <button class="mobile-check-btn" type="button" onclick="quickCheckSafety()">Check Safety</button>
-    <button class="mobile-icon-btn" type="button" onclick="handleMobileMic()" aria-label="Voice language">
+    <button class="mobile-icon-btn" type="button" onclick="startVoiceFromCurrentLanguage()" aria-label="Microphone">
         <svg viewBox="0 0 24 24">
             <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"></path>
             <path d="M19 11a7 7 0 0 1-14 0"></path>
@@ -1343,7 +1483,17 @@
             <path d="M9 21h6"></path>
         </svg>
     </button>
-    <button class="mobile-icon-btn" type="button" onclick="openLiveCameraFullscreen()" aria-label="Live camera">
+    <button class="mobile-icon-btn" type="button" onclick="toggleMobileLangSheet()" aria-label="Choose language">
+        <svg viewBox="0 0 24 24">
+            <path d="M3 5h12"></path>
+            <path d="M9 3v2"></path>
+            <path d="M7 5c0 4 2 7 5 9"></path>
+            <path d="M10 11c1.2 1.6 2.9 2.9 5 4"></path>
+            <path d="M14 5h7"></path>
+            <path d="M18 5c0 5-2 9-5 12"></path>
+        </svg>
+    </button>
+    <button class="mobile-icon-btn" type="button" onclick="openAnalyzeCameraFullscreen()" aria-label="Live camera">
         <svg viewBox="0 0 24 24">
             <path d="M4 7h4l2-2h4l2 2h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"></path>
             <circle cx="12" cy="13" r="3.5"></circle>
@@ -1351,18 +1501,18 @@
     </button>
 </div>
 
-<video id="mobileFullscreenVideo" autoplay playsinline muted></video>
+<video id="mobileFullscreenVideo" autoplay playsinline></video>
 <div id="mobileCamSubtitle" class="mobile-cam-subtitle"></div>
 
 <div id="fullscreenCamControls">
     <button class="fs-cam-btn" type="button" onclick="switchLiveCamera()" aria-label="Switch camera">⟲</button>
-    <button class="fs-cam-btn fs-capture-btn" type="button" onclick="analyzeScene('autosync')" aria-label="Analyze">●</button>
+    <button class="fs-cam-btn fs-capture-btn" type="button" onclick="mobilePrimaryCameraAction()" aria-label="Primary action" id="mobilePrimaryCamBtn">Analyze</button>
     <button class="fs-cam-btn" type="button" onclick="closeLiveCameraFullscreen()" aria-label="Close camera">×</button>
 </div>
 
 <!-- Feedback Modal -->
 <div id="feedbackModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
-    <div style="background:var(--surface); padding:24px; border-radius:16px; width:90%; max-width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+    <div class="feedback-modal-content" style="padding:24px; border-radius:16px; width:90%; max-width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
         <h3 style="margin:0 0 16px;">Your Feedback Matters</h3>
         
         <label style="display:block; margin-bottom:8px; font-weight:500;">Rating (1–5)</label>
@@ -1393,6 +1543,8 @@ let communityLayer=null;
 let availableVideoInputs=[];
 let activeVideoInputIndex=-1;
 let mobileFacingMode="environment";
+let mobileCameraMode="analyze";
+let mobileCapturedImageData=null;
 const userToken = 'guest-' + Math.random().toString(36).substr(2, 9);
 
 /* ==================== LANGUAGE SWITCH (NEW FEATURE) ==================== */
@@ -1400,6 +1552,10 @@ const CURRENT_LANG_KEY = "voice_current_lang";
 let currentVoiceLang = localStorage.getItem(CURRENT_LANG_KEY) || "en";
 const MOBILE_LANG_SELECTED_KEY = "mobile_lang_selected";
 const SAFETY_HISTORY_KEY = "mobile_safety_history";
+
+function getLanguageDisplayName(langKey){
+    return {en:"English", te:"తెలుగు", hi:"हिन्दी"}[langKey] || "English";
+}
 
 function switchLanguage(lang) {
     if (!["en","te","hi"].includes(lang)) return;
@@ -1419,7 +1575,8 @@ function switchLanguage(lang) {
         hi: "वॉइस भाषा हिंदी में बदल दी गई।"
     };
     speakTextInLanguage(lang, confirmMsgs[lang]);
-    setCameraStatus(`Language switched to ${lang.toUpperCase()}`, "success");
+    setCameraStatus(`Language switched to ${getLanguageDisplayName(lang)}.`, "success");
+    refreshMobileLanguageHint();
 }
 /* =================================================================== */
 
@@ -1667,6 +1824,28 @@ function getIntentScore(text, phrases){
     return score;
 }
 
+function isNativeScriptPhrase(phrase, lang){
+    if(lang === "te"){
+        return /[\u0C00-\u0C7F]/.test(phrase);
+    }
+    if(lang === "hi"){
+        return /[\u0900-\u097F]/.test(phrase);
+    }
+    return true;
+}
+
+function getIntentPhrasesForMode(intent, lang){
+    const allPhrases = (VOICE_INTENT_PATTERNS[intent] && (VOICE_INTENT_PATTERNS[intent][lang] || VOICE_INTENT_PATTERNS[intent].en)) || [];
+    if(!isMobileCameraDevice()){
+        return allPhrases;
+    }
+    if(lang === "te" || lang === "hi"){
+        const nativeOnly = allPhrases.filter((p)=>isNativeScriptPhrase(p, lang));
+        return nativeOnly.length ? nativeOnly : allPhrases;
+    }
+    return allPhrases;
+}
+
 /* ==================== UPDATED FOR FIXED LANGUAGE (FAST + RELIABLE) ==================== */
 function detectVoiceIntent(transcript, lang = currentVoiceLang){
     const text=normalizeSpeechText(transcript);
@@ -1677,7 +1856,7 @@ function detectVoiceIntent(transcript, lang = currentVoiceLang){
     const intentKeys=VOICE_ALLOWED_INTENTS;
 
     intentKeys.forEach((intent)=>{
-        const phrases = VOICE_INTENT_PATTERNS[intent][lang] || VOICE_INTENT_PATTERNS[intent].en || [];
+        const phrases = getIntentPhrasesForMode(intent, lang);
         const score = getIntentScore(text, phrases);
         if(score > bestScore){
             bestScore = score;
@@ -1886,7 +2065,7 @@ async function recognizeIntentInLanguage(langKey){
 }
 
 async function detectVoiceIntentLive(){
-    setCameraStatus(`Listening in ${currentVoiceLang === 'en' ? 'English' : currentVoiceLang === 'te' ? 'Telugu' : 'Hindi'}... Speak naturally.`);
+    setCameraStatus(`Listening in ${getLanguageDisplayName(currentVoiceLang)}... Speak naturally.`);
 
     try{
         const result = await recognizeIntentInLanguage(currentVoiceLang);
@@ -2118,14 +2297,14 @@ async function submitCommunityPost(){
 
     const input=document.getElementById("communityImageInput");
     const file=input.files[0];
-    if(!file){
+    if(!file && !mobileCapturedImageData){
         setCommunityStatus("Select an image before uploading.",true);
         return;
     }
 
     setCommunityStatus("Uploading community alert...");
     try{
-        const imageData=await fileToDataUrl(file);
+        const imageData=file ? await fileToDataUrl(file) : mobileCapturedImageData;
         const payload={
             image:imageData,
             lat:currentLat,
@@ -2141,6 +2320,7 @@ async function submitCommunityPost(){
         const data=await res.json();
         if(!res.ok) throw new Error(data.message || "Upload failed");
         input.value="";
+        mobileCapturedImageData=null;
         document.getElementById("communityNote").value="";
         setCommunityStatus("Community alert uploaded successfully.");
         await loadCommunityPosts();
@@ -2257,6 +2437,7 @@ window.addEventListener("load", function(){
     initVoices();
     updateMobileSnapshot();
     renderMobileHistory();
+    refreshMobileLanguageHint();
 
     // Set initial active language button
     document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -2338,9 +2519,11 @@ function closeMobileSheets(){
     const quick=document.getElementById("mobileQuickSheet");
     const lang=document.getElementById("mobileLangSheet");
     const menu=document.getElementById("mobileMenuSheet");
+    const overlay=document.getElementById("mobileMenuOverlay");
     if(quick) quick.classList.remove("show");
     if(lang) lang.classList.remove("show");
     if(menu) menu.classList.remove("show");
+    if(overlay) overlay.classList.remove("show");
 }
 
 function toggleMobileQuickSheet(){
@@ -2367,11 +2550,27 @@ function toggleMobileMenu(){
     const quick=document.getElementById("mobileQuickSheet");
     const lang=document.getElementById("mobileLangSheet");
     const menu=document.getElementById("mobileMenuSheet");
+    const overlay=document.getElementById("mobileMenuOverlay");
     if(!menu) return;
     renderMobileHistory();
     menu.classList.toggle("show");
+    if(overlay) overlay.classList.toggle("show");
     if(quick) quick.classList.remove("show");
     if(lang) lang.classList.remove("show");
+}
+
+function closeMobileMenu(){
+    const menu=document.getElementById("mobileMenuSheet");
+    const overlay=document.getElementById("mobileMenuOverlay");
+    if(menu) menu.classList.remove("show");
+    if(overlay) overlay.classList.remove("show");
+}
+
+function setMobileCameraMode(mode){
+    mobileCameraMode=mode;
+    const btn=document.getElementById("mobilePrimaryCamBtn");
+    if(!btn) return;
+    btn.innerText = mode === "capture" ? "Capture" : "Analyze";
 }
 
 function quickUploadPhoto(){
@@ -2411,26 +2610,40 @@ function mobileChooseLanguage(lang){
 }
 
 function handleMobileMic(){
-    closeMobileSheets();
-    const selected = localStorage.getItem(MOBILE_LANG_SELECTED_KEY) === "true";
-    if(selected){
-        startVoice();
-        return;
-    }
-    const lang=document.getElementById("mobileLangSheet");
-    if(lang) lang.classList.add("show");
+    toggleMobileLangSheet();
 }
 
-async function openLiveCameraFullscreen(){
+function startVoiceFromCurrentLanguage(){
+    localStorage.setItem(MOBILE_LANG_SELECTED_KEY, "true");
     closeMobileSheets();
+    startVoice();
+}
+
+function refreshMobileLanguageHint(){
+    const btn=document.getElementById("mobileStartCurrentBtn");
+    if(!btn) return;
+    btn.innerText=`Use current language (${getLanguageDisplayName(currentVoiceLang)})`;
+}
+
+async function openLiveCameraFullscreen(mode="analyze"){
+    closeMobileSheets();
+    setMobileCameraMode(mode);
     const opened=await openCamera(false);
     if(!opened) return;
     const fsVideo=document.getElementById("mobileFullscreenVideo");
     if(fsVideo){
         fsVideo.srcObject=videoStream;
-        await waitForVideoReady(fsVideo);
+        fsVideo.play().catch(()=>{});
     }
     document.body.classList.add("camera-fullscreen-mode");
+}
+
+async function openAnalyzeCameraFullscreen(){
+    return openLiveCameraFullscreen("analyze");
+}
+
+async function openCaptureCameraFullscreen(){
+    return openLiveCameraFullscreen("capture");
 }
 
 function closeLiveCameraFullscreen(){
@@ -2444,8 +2657,23 @@ async function switchLiveCamera(){
     const fsVideo=document.getElementById("mobileFullscreenVideo");
     if(fsVideo){
         fsVideo.srcObject=videoStream;
-        await waitForVideoReady(fsVideo);
+        fsVideo.play().catch(()=>{});
     }
+}
+
+function mobilePrimaryCameraAction(){
+    if(mobileCameraMode === "capture"){
+        const video=document.getElementById("mobileFullscreenVideo");
+        if(!video || !videoStream || video.videoWidth===0){
+            setCameraStatus("Camera not ready. Please try again.","error");
+            return;
+        }
+        mobileCapturedImageData=captureFrameImage(video);
+        setCameraStatus("Photo captured. You can submit it as Community Alert.","success");
+        speakTextInLanguage(currentVoiceLang, "Photo captured successfully.");
+        return;
+    }
+    analyzeScene("autosync");
 }
 
 let voiceBusy=false;
@@ -2544,25 +2772,30 @@ async function switchMobileCamera(video){
         return true;
     }catch(_facingErr){
         // Fallback to explicit deviceId switch if available
-        await refreshVideoInputs();
-        if(availableVideoInputs.length<2){
-            setCameraStatus("Only one camera found on this device.","error");
+        try{
+            await refreshVideoInputs();
+            if(availableVideoInputs.length<2){
+                setCameraStatus("Switch not supported on this browser/device.","error");
+                return false;
+            }
+            detectActiveCameraIndex();
+            const nextIndex=(activeVideoInputIndex+1) % availableVideoInputs.length;
+            const nextDevice=availableVideoInputs[nextIndex];
+            const nextStream=await navigator.mediaDevices.getUserMedia({
+                video:{deviceId:{exact:nextDevice.deviceId}},
+                audio:false
+            });
+            if(videoStream){
+                videoStream.getTracks().forEach((t)=>t.stop());
+            }
+            videoStream=nextStream;
+            video.srcObject=nextStream;
+            activeVideoInputIndex=nextIndex;
+            return true;
+        }catch(_deviceErr){
+            setCameraStatus("Unable to switch camera on this device.","error");
             return false;
         }
-        detectActiveCameraIndex();
-        const nextIndex=(activeVideoInputIndex+1) % availableVideoInputs.length;
-        const nextDevice=availableVideoInputs[nextIndex];
-        const nextStream=await navigator.mediaDevices.getUserMedia({
-            video:{deviceId:{exact:nextDevice.deviceId}},
-            audio:false
-        });
-        if(videoStream){
-            videoStream.getTracks().forEach((t)=>t.stop());
-        }
-        videoStream=nextStream;
-        video.srcObject=nextStream;
-        activeVideoInputIndex=nextIndex;
-        return true;
     }
 }
 
@@ -2587,7 +2820,7 @@ async function openCamera(allowSwitch=false){
                     if(fsVideo) fsVideo.srcObject=videoStream;
                     setCameraStatus("Camera switched.","success");
                 }
-                return switched || true;
+                return switched;
             }catch(_err){
                 setCameraStatus("Unable to switch camera.","error");
                 return false;
