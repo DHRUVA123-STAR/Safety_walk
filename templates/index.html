@@ -366,6 +366,20 @@
             box-shadow:0 12px 20px rgba(20,184,166,0.35);
         }
 
+        #closeCameraBtn{
+            display:none;
+            width:100%;
+            margin-top:10px;
+            border:1px solid rgba(255,255,255,0.28);
+            border-radius:12px;
+            padding:10px 14px;
+            font-size:14px;
+            font-weight:700;
+            background:rgba(15,23,42,0.35);
+            color:#e5edf7;
+            cursor:pointer;
+        }
+
         .camera-functions{
             margin-top:16px;
             display:grid;
@@ -695,6 +709,238 @@
         .dark-mode .helpful-btn:hover {
             background: #334155;
         }
+
+        .mobile-chatbar,
+        .mobile-quick-sheet,
+        .mobile-lang-sheet,
+        .mobile-center-score,
+        #fullscreenCamControls {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding-bottom: 108px;
+            }
+
+            .header .icons {
+                display: none;
+            }
+
+            .header h2 {
+                font-size: 2rem;
+                line-height: 1.08;
+                letter-spacing: 0.01em;
+            }
+
+            .mobile-chatbar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                position: fixed;
+                left: 12px;
+                right: 12px;
+                bottom: 10px;
+                z-index: 1100;
+                padding: 10px;
+                border-radius: 999px;
+                background: rgba(9, 14, 24, 0.92);
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                box-shadow: 0 16px 32px rgba(0, 0, 0, 0.34);
+            }
+
+            .mobile-chatbar button {
+                border: none;
+                cursor: pointer;
+            }
+
+            .mobile-plus-btn,
+            .mobile-icon-btn {
+                width: 48px;
+                height: 48px;
+                border-radius: 999px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: #20252e;
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                font-size: 22px;
+                flex: 0 0 auto;
+            }
+
+            .mobile-icon-btn svg {
+                width: 21px;
+                height: 21px;
+                stroke: #ffffff;
+                fill: none;
+                stroke-width: 2;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+            }
+
+            .mobile-check-btn {
+                flex: 1 1 auto;
+                min-width: 0;
+                border-radius: 999px;
+                padding: 13px 16px;
+                background: linear-gradient(135deg, #2575fc 0%, #1fc3d6 100%);
+                color: #ffffff;
+                font-weight: 700;
+                font-size: 15px;
+                white-space: nowrap;
+            }
+
+            .mobile-quick-sheet,
+            .mobile-lang-sheet {
+                position: fixed;
+                left: 12px;
+                right: 12px;
+                bottom: 78px;
+                z-index: 1120;
+                background: rgba(12, 18, 31, 0.96);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                border-radius: 18px;
+                padding: 12px;
+                box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
+            }
+
+            .mobile-quick-sheet.show,
+            .mobile-lang-sheet.show,
+            .mobile-center-score.show {
+                display: block;
+            }
+
+            .mobile-sheet-btn {
+                width: 100%;
+                margin: 0 0 8px;
+                padding: 12px 14px;
+                border-radius: 12px;
+                text-align: left;
+                color: #ffffff;
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                font-weight: 600;
+            }
+
+            .mobile-sheet-btn:last-child {
+                margin-bottom: 0;
+            }
+
+            .mobile-lang-title {
+                color: #dbeafe;
+                font-size: 13px;
+                margin: 0 0 10px;
+                letter-spacing: 0.02em;
+            }
+
+            .mobile-lang-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 8px;
+            }
+
+            .mobile-lang-btn {
+                padding: 11px 8px;
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                color: #ffffff;
+                font-weight: 700;
+                font-size: 13px;
+            }
+
+            .mobile-center-score {
+                position: fixed;
+                left: 50%;
+                top: 46%;
+                transform: translate(-50%, -50%);
+                z-index: 1130;
+                width: min(90vw, 360px);
+                padding: 18px 16px;
+                border-radius: 18px;
+                background: rgba(10, 14, 24, 0.95);
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                text-align: center;
+                box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+            }
+
+            .mobile-center-score h4 {
+                margin: 0 0 6px;
+                font-size: 1rem;
+            }
+
+            .mobile-center-score .score {
+                margin: 0;
+                font-size: 1.5rem;
+                font-weight: 800;
+            }
+
+            body.camera-fullscreen-mode {
+                overflow: hidden;
+            }
+
+            body.camera-fullscreen-mode #video {
+                display: block !important;
+                opacity: 1 !important;
+                transform: none !important;
+                position: fixed;
+                inset: 0;
+                width: 100vw;
+                height: 100vh;
+                object-fit: cover;
+                z-index: 1200;
+                border: none;
+                border-radius: 0;
+                margin: 0;
+            }
+
+            body.camera-fullscreen-mode #fullscreenCamControls {
+                display: flex;
+                position: fixed;
+                top: 14px;
+                right: 14px;
+                z-index: 1210;
+                gap: 10px;
+            }
+
+            .fs-cam-btn {
+                width: 44px;
+                height: 44px;
+                border-radius: 999px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                background: rgba(0, 0, 0, 0.45);
+                color: #fff;
+                font-weight: 800;
+                font-size: 20px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            body.camera-fullscreen-mode #analyzeBtn {
+                display: block !important;
+                position: fixed;
+                left: 16px;
+                right: 16px;
+                bottom: 92px;
+                z-index: 1210;
+                border-radius: 999px;
+            }
+
+            body.camera-fullscreen-mode #closeCameraBtn,
+            body.camera-fullscreen-mode .camera-title,
+            body.camera-fullscreen-mode .camera-subtitle,
+            body.camera-fullscreen-mode .camera-functions,
+            body.camera-fullscreen-mode .camera-status,
+            body.camera-fullscreen-mode #map,
+            body.camera-fullscreen-mode .mobile-chatbar,
+            body.camera-fullscreen-mode .mobile-quick-sheet,
+            body.camera-fullscreen-mode .mobile-lang-sheet {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 
@@ -872,6 +1118,49 @@
 
 </div>
 
+<div class="mobile-center-score" id="mobileCenterScore">
+    <h4 id="mobileScoreLevel">Safety Level</h4>
+    <p class="score" id="mobileScoreValue">Score: 0</p>
+</div>
+
+<div class="mobile-quick-sheet" id="mobileQuickSheet">
+    <button class="mobile-sheet-btn" type="button" onclick="quickUploadPhoto()">Upload Photo</button>
+    <button class="mobile-sheet-btn" type="button" onclick="openLiveCameraFullscreen()">Open Camera</button>
+</div>
+
+<div class="mobile-lang-sheet" id="mobileLangSheet">
+    <p class="mobile-lang-title">Choose Voice Language</p>
+    <div class="mobile-lang-grid">
+        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('en')">English</button>
+        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('te')">Telugu</button>
+        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('hi')">Hindi</button>
+    </div>
+</div>
+
+<div class="mobile-chatbar" id="mobileChatBar">
+    <button class="mobile-plus-btn" type="button" onclick="toggleMobileQuickSheet()">+</button>
+    <button class="mobile-check-btn" type="button" onclick="quickCheckSafety()">Check Safety</button>
+    <button class="mobile-icon-btn" type="button" onclick="toggleMobileLangSheet()" aria-label="Voice language">
+        <svg viewBox="0 0 24 24">
+            <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"></path>
+            <path d="M19 11a7 7 0 0 1-14 0"></path>
+            <path d="M12 18v3"></path>
+            <path d="M9 21h6"></path>
+        </svg>
+    </button>
+    <button class="mobile-icon-btn" type="button" onclick="openLiveCameraFullscreen()" aria-label="Live camera">
+        <svg viewBox="0 0 24 24">
+            <path d="M4 7h4l2-2h4l2 2h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"></path>
+            <circle cx="12" cy="13" r="3.5"></circle>
+        </svg>
+    </button>
+</div>
+
+<div id="fullscreenCamControls">
+    <button class="fs-cam-btn" type="button" onclick="switchLiveCamera()" aria-label="Switch camera">↕</button>
+    <button class="fs-cam-btn" type="button" onclick="closeLiveCameraFullscreen()" aria-label="Close camera">×</button>
+</div>
+
 <!-- Feedback Modal -->
 <div id="feedbackModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
     <div style="background:var(--surface); padding:24px; border-radius:16px; width:90%; max-width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
@@ -904,6 +1193,7 @@ let currentLon=null;
 let communityLayer=null;
 let availableVideoInputs=[];
 let activeVideoInputIndex=-1;
+let mobileFacingMode="environment";
 const userToken = 'guest-' + Math.random().toString(36).substr(2, 9);
 
 /* ==================== LANGUAGE SWITCH (NEW FEATURE) ==================== */
@@ -1767,6 +2057,80 @@ function toggleTheme(){
     document.body.classList.toggle("dark-mode");
 }
 
+let mobileScoreTimer=null;
+
+function closeMobileSheets(){
+    const quick=document.getElementById("mobileQuickSheet");
+    const lang=document.getElementById("mobileLangSheet");
+    if(quick) quick.classList.remove("show");
+    if(lang) lang.classList.remove("show");
+}
+
+function toggleMobileQuickSheet(){
+    const quick=document.getElementById("mobileQuickSheet");
+    const lang=document.getElementById("mobileLangSheet");
+    if(!quick) return;
+    quick.classList.toggle("show");
+    if(lang) lang.classList.remove("show");
+}
+
+function toggleMobileLangSheet(){
+    const quick=document.getElementById("mobileQuickSheet");
+    const lang=document.getElementById("mobileLangSheet");
+    if(!lang) return;
+    lang.classList.toggle("show");
+    if(quick) quick.classList.remove("show");
+}
+
+function quickUploadPhoto(){
+    closeMobileSheets();
+    document.getElementById("communityImageInput").click();
+}
+
+function showMobileScoreCenter(level, score){
+    const box=document.getElementById("mobileCenterScore");
+    if(!box) return;
+    document.getElementById("mobileScoreLevel").innerText=`Safety Level: ${level}`;
+    document.getElementById("mobileScoreValue").innerText=`Score: ${score}`;
+    box.classList.add("show");
+    if(mobileScoreTimer) clearTimeout(mobileScoreTimer);
+    mobileScoreTimer=setTimeout(()=>box.classList.remove("show"),2500);
+}
+
+function quickCheckSafety(){
+    closeMobileSheets();
+    calculateSafety()
+    .then((data)=>{
+        showMobileScoreCenter(data.safety_level, data.score);
+        setCameraStatus("Safety score updated from quick action.","success");
+    })
+    .catch(()=>{
+        setCameraStatus("Quick safety check failed. Please try again.","error");
+    });
+}
+
+function mobileChooseLanguage(lang){
+    switchLanguage(lang);
+    closeMobileSheets();
+    startVoice();
+}
+
+async function openLiveCameraFullscreen(){
+    closeMobileSheets();
+    const opened=await openCamera(false);
+    if(!opened) return;
+    document.body.classList.add("camera-fullscreen-mode");
+}
+
+function closeLiveCameraFullscreen(){
+    document.body.classList.remove("camera-fullscreen-mode");
+    stopCamera();
+}
+
+async function switchLiveCamera(){
+    await openCamera(true);
+}
+
 let voiceBusy=false;
 
 async function startVoice(){
@@ -1837,25 +2201,44 @@ async function switchMobileCamera(video){
     if(!isMobileCameraDevice()){
         return false;
     }
-    await refreshVideoInputs();
-    if(availableVideoInputs.length<2){
-        setCameraStatus("Only one camera found on this device.","error");
-        return false;
+    mobileFacingMode = mobileFacingMode === "environment" ? "user" : "environment";
+
+    // First try by facingMode (most compatible on phones)
+    try{
+        const nextStream=await navigator.mediaDevices.getUserMedia({
+            video:{facingMode:{ideal:mobileFacingMode}},
+            audio:false
+        });
+        if(videoStream){
+            videoStream.getTracks().forEach((t)=>t.stop());
+        }
+        videoStream=nextStream;
+        video.srcObject=nextStream;
+        await refreshVideoInputs();
+        detectActiveCameraIndex();
+        return true;
+    }catch(_facingErr){
+        // Fallback to explicit deviceId switch if available
+        await refreshVideoInputs();
+        if(availableVideoInputs.length<2){
+            setCameraStatus("Only one camera found on this device.","error");
+            return false;
+        }
+        detectActiveCameraIndex();
+        const nextIndex=(activeVideoInputIndex+1) % availableVideoInputs.length;
+        const nextDevice=availableVideoInputs[nextIndex];
+        const nextStream=await navigator.mediaDevices.getUserMedia({
+            video:{deviceId:{exact:nextDevice.deviceId}},
+            audio:false
+        });
+        if(videoStream){
+            videoStream.getTracks().forEach((t)=>t.stop());
+        }
+        videoStream=nextStream;
+        video.srcObject=nextStream;
+        activeVideoInputIndex=nextIndex;
+        return true;
     }
-    detectActiveCameraIndex();
-    const nextIndex=(activeVideoInputIndex+1) % availableVideoInputs.length;
-    const nextDevice=availableVideoInputs[nextIndex];
-    const nextStream=await navigator.mediaDevices.getUserMedia({
-        video:{deviceId:{exact:nextDevice.deviceId}},
-        audio:false
-    });
-    if(videoStream){
-        videoStream.getTracks().forEach((t)=>t.stop());
-    }
-    videoStream=nextStream;
-    video.srcObject=nextStream;
-    activeVideoInputIndex=nextIndex;
-    return true;
 }
 
 async function openCamera(allowSwitch=false){
@@ -1864,6 +2247,11 @@ async function openCamera(allowSwitch=false){
     const closeCameraBtn=document.getElementById("closeCameraBtn");
     const cameraPanel=document.getElementById("cameraPanel");
     const mobile=isMobileCameraDevice();
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        setCameraStatus("Camera API not available. Use HTTPS and a modern browser.","error");
+        return false;
+    }
 
     if(videoStream){
         if(allowSwitch && mobile){
@@ -1883,7 +2271,7 @@ async function openCamera(allowSwitch=false){
 
     video.style.display="block";
     analyzeBtn.style.display="block";
-    closeCameraBtn.style.display="block";
+    if(closeCameraBtn) closeCameraBtn.style.display="block";
     cameraPanel.classList.add("live");
 
     try{
@@ -1891,7 +2279,7 @@ async function openCamera(allowSwitch=false){
         if(mobile){
             try{
                 stream=await navigator.mediaDevices.getUserMedia({
-                    video:{facingMode:{ideal:"environment"}},
+                    video:{facingMode:{ideal:mobileFacingMode}},
                     audio:false
                 });
             }catch(_mobileErr){
@@ -1907,7 +2295,12 @@ async function openCamera(allowSwitch=false){
         setCameraStatus(mobile ? "Camera opened (back camera preferred)." : "Camera opened successfully.","success");
         return true;
     }catch(error){
-        setCameraStatus("Camera permission denied.","error");
+        const reason = (error && error.name) ? error.name : "Permission denied";
+        if(window.isSecureContext === false){
+            setCameraStatus("Camera blocked: open site on HTTPS to allow access.","error");
+        }else{
+            setCameraStatus(`Camera error: ${reason}. Check permissions.`, "error");
+        }
         return false;
     }
 }
@@ -1917,10 +2310,12 @@ function stopCamera(){
     const analyzeBtn=document.getElementById("analyzeBtn");
     const closeCameraBtn=document.getElementById("closeCameraBtn");
     const cameraPanel=document.getElementById("cameraPanel");
+    document.body.classList.remove("camera-fullscreen-mode");
+    closeMobileSheets();
 
     video.style.display="none";
     analyzeBtn.style.display="none";
-    closeCameraBtn.style.display="none";
+    if(closeCameraBtn) closeCameraBtn.style.display="none";
     cameraPanel.classList.remove("live");
 
     if(videoStream){
