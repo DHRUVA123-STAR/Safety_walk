@@ -814,8 +814,9 @@
 
             .mobile-stage {
                 display: flex;
+                flex-direction: column;
                 justify-content: center;
-                align-items: flex-start;
+                align-items: center;
                 height: calc(100dvh - 190px);
                 overflow-y: auto;
                 padding-bottom: 18px;
@@ -1171,6 +1172,13 @@
                 color: #ffffff;
                 font-weight: 700;
                 font-size: 13px;
+            }
+
+            .mobile-lang-btn.active {
+                background: linear-gradient(135deg, #2575fc 0%, #1fc3d6 100%);
+                border-color: rgba(255, 255, 255, 0.35);
+                color: #ffffff;
+                box-shadow: 0 8px 18px rgba(37, 117, 252, 0.35);
             }
 
             .mobile-center-score {
@@ -1587,9 +1595,9 @@
 <div class="mobile-lang-sheet" id="mobileLangSheet">
     <p class="mobile-lang-title">Choose Voice Language</p>
     <div class="mobile-lang-grid">
-        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('en')">English</button>
-        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('te')">తెలుగు</button>
-        <button class="mobile-lang-btn" type="button" onclick="mobileChooseLanguage('hi')">हिन्दी</button>
+        <button class="mobile-lang-btn" id="mobile-lang-en" type="button" onclick="mobileChooseLanguage('en')">English</button>
+        <button class="mobile-lang-btn" id="mobile-lang-te" type="button" onclick="mobileChooseLanguage('te')">తెలుగు</button>
+        <button class="mobile-lang-btn" id="mobile-lang-hi" type="button" onclick="mobileChooseLanguage('hi')">हिन्दी</button>
     </div>
 </div>
 
@@ -1697,6 +1705,15 @@ function getLanguageDisplayName(langKey){
     return {en:"English", te:"తెలుగు", hi:"हिन्दी"}[langKey] || "English";
 }
 
+function updateMobileLanguageButtons(){
+    ["en","te","hi"].forEach((lang)=>{
+        const btn=document.getElementById(`mobile-lang-${lang}`);
+        if(btn){
+            btn.classList.toggle("active", lang===currentVoiceLang);
+        }
+    });
+}
+
 function switchLanguage(lang) {
     if (!["en","te","hi"].includes(lang)) return;
 
@@ -1710,6 +1727,7 @@ function switchLanguage(lang) {
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.id === `lang-${lang}`);
     });
+    updateMobileLanguageButtons();
 
     setCameraStatus(`Language switched to ${getLanguageDisplayName(lang)}.`, "success");
     refreshMobileLanguageHint();
@@ -2843,6 +2861,7 @@ window.addEventListener("load", function(){
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.id === `lang-${currentVoiceLang}`);
     });
+    updateMobileLanguageButtons();
 
     {% if score %}
     animateScore({{score}});

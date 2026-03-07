@@ -211,6 +211,12 @@ def get_yolo_detector():
     return _yolo_model
 
 def preprocess_for_detection(img):
+    # Fast path for bright scenes to reduce latency on low-CPU cloud instances.
+    base_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    base_brightness = float(np.mean(base_gray))
+    if base_brightness >= 95:
+        return img
+
     # CLAHE on luminance channel for better shadow detail.
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
@@ -232,10 +238,6 @@ def preprocess_for_detection(img):
     kernel = np.array([[0, -1, 0], [-1, 5.15, -1], [0, -1, 0]], dtype=np.float32)
     out = cv2.filter2D(out, -1, kernel)
 
-    # Mild denoise only for very low light to reduce sensor grain.
-    if brightness < 45:
-        out = cv2.fastNlMeansDenoisingColored(out, None, 3, 3, 7, 21)
-
     return out
 
 def yolo_conf_threshold(brightness):
@@ -248,19 +250,8 @@ def yolo_conf_threshold(brightness):
 def detect_scene_yolo(img, brightness):
     detector = get_yolo_detector()
     conf = yolo_conf_threshold(brightness)
-    # Restrict to traffic/person classes and smaller input for Render stability.
     # COCO ids: person=0, bicycle=1, car=2, motorcycle=3, bus=5, truck=7
-    results = detector.predict(
-        source=img,
-        conf=conf,
-        iou=0.5,
-        verbose=False,
-        imgsz=512,
-        classes=[0, 1, 2, 3, 5, 7]
-    )
-
-    vehicles_by_type = {}
-    people_count = 0
+    target_classes = [0, 1, 2, 3, 5, 7]
     class_map = {
         "car": "car",
         "bus": "bus",
@@ -271,23 +262,53 @@ def detect_scene_yolo(img, brightness):
         "person": "person"
     }
 
-    for result in results:
-        names = result.names
-        boxes = result.boxes
-        if boxes is None:
-            continue
-        for c in boxes.cls:
-            cls_id = int(c.item())
-            cls_name = names.get(cls_id, "").lower()
-            mapped = class_map.get(cls_name)
-            if mapped == "person":
-                people_count += 1
-            elif mapped:
-                vehicles_by_type[mapped] = vehicles_by_type.get(mapped, 0) + 1
+    def parse_results(results):
+        vehicles_by_type = {}
+        people_count = 0
+        for result in results:
+            names = result.names
+            boxes = result.boxes
+            if boxes is None:
+                continue
+            for c in boxes.cls:
+                cls_id = int(c.item())
+                cls_name = names.get(cls_id, "").lower()
+                mapped = class_map.get(cls_name)
+                if mapped == "person":
+                    people_count += 1
+                elif mapped:
+                    vehicles_by_type[mapped] = vehicles_by_type.get(mapped, 0) + 1
+        vehicle_count = sum(vehicles_by_type.values())
+        crowd = "Dense" if people_count >= 4 else "Less"
+        return vehicle_count, vehicles_by_type, people_count, crowd
 
-    vehicle_count = sum(vehicles_by_type.values())
-    crowd = "Dense" if people_count >= 4 else "Less"
-    return vehicle_count, vehicles_by_type, people_count, crowd
+    # Quick pass for empty-scene fast return.
+    quick_conf = min(0.55, max(0.35, conf + 0.10))
+    quick_results = detector.predict(
+        source=img,
+        conf=quick_conf,
+        iou=0.5,
+        verbose=False,
+        imgsz=320,
+        classes=target_classes,
+        max_det=12
+    )
+    quick_vehicle_count, quick_vehicles_by_type, quick_people_count, quick_crowd = parse_results(quick_results)
+    if quick_vehicle_count == 0 and quick_people_count == 0:
+        return quick_vehicle_count, quick_vehicles_by_type, quick_people_count, quick_crowd, "yolov8n-fast-empty"
+
+    # Full pass only when quick pass detects likely objects.
+    full_results = detector.predict(
+        source=img,
+        conf=conf,
+        iou=0.5,
+        verbose=False,
+        imgsz=448,
+        classes=target_classes,
+        max_det=48
+    )
+    vehicle_count, vehicles_by_type, people_count, crowd = parse_results(full_results)
+    return vehicle_count, vehicles_by_type, people_count, crowd, "yolov8n-full"
 
 def merge_traffic_signals(camera_traffic, traffic_api):
     if not traffic_api.get("available"):
@@ -738,8 +759,8 @@ def analyze_scene():
         lighting, brightness = detect_lighting(processed_img)
         detector_used = "fallback"
         try:
-            vehicle_count, vehicles_by_type, people_count, crowd = detect_scene_yolo(processed_img, brightness)
-            detector_used = "yolov8n"
+            vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(processed_img, brightness)
+            detector_used = yolo_mode
         except Exception:
             vehicle_count, vehicles_by_type = detect_vehicles_dnn(processed_img, confidence_threshold=0.30)
             people_count, crowd = detect_crowd_opencv(processed_img)
