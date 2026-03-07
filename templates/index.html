@@ -9,6 +9,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+    <link rel="shortcut icon" href="/icon-192.png">
     <link rel="apple-touch-icon" href="/icon-192.png">
     
     <!-- Fonts -->
@@ -606,6 +610,11 @@
             to{opacity:1; transform:translateY(0);}
         }
 
+        @keyframes subtitlePulse {
+            0% { opacity: 0.78; transform: translateY(0) scale(1); }
+            100% { opacity: 1; transform: translateY(-1px) scale(1.01); }
+        }
+
         /* ────────────────────────────────────────────────
            Added mobile + touch + feedback styles
         ───────────────────────────────────────────────── */
@@ -721,7 +730,8 @@
         .mobile-menu-overlay,
         .mobile-community-card,
         #mobileFullscreenVideo,
-        .mobile-cam-subtitle {
+        .mobile-cam-subtitle,
+        .mobile-capture-preview {
             display: none;
         }
 
@@ -1261,6 +1271,12 @@
                 border: 1px solid rgba(255,255,255,0.2);
                 border-radius: 12px;
                 padding: 8px 10px;
+                transition: opacity 0.26s ease, transform 0.26s ease;
+                will-change: opacity, transform;
+            }
+
+            body.camera-fullscreen-mode .mobile-cam-subtitle.is-thinking {
+                animation: subtitlePulse 1.15s ease-in-out infinite alternate;
             }
 
             .dark-mode .mobile-top-btn,
@@ -1279,7 +1295,7 @@
 
             .dark-mode .mobile-stage-grid div {
                 background: #1a202c;
-                border-color: rgba(255,255,255,0.12);
+                border-color: rgba(255,255,255,0.12); 
             }
 
             .dark-mode .mobile-stage-grid span { color: #9fb0c4; }
@@ -1378,6 +1394,12 @@
             color: #e2e8f0;
             border: 1px solid #334155;
         }
+
+        .dark-mode #feedbackCancelBtn {
+            color: #e2e8f0 !important;
+            border-color: #64748b !important;
+            background: transparent !important;
+        }
     </style>
 </head>
 
@@ -1409,25 +1431,6 @@
                 <div><span>Crowd</span><strong id="mCrowd">-</strong></div>
             </div>
             <div class="mobile-stage-note" id="mobileStageNote">Tap Check Safety to calculate live score.</div>
-            <div class="mobile-community-card" id="mobileCommunityCard">
-                <h4>Community Alert</h4>
-                <p>Share captured/uploaded hazard with nearby users.</p>
-                <div class="mobile-community-actions">
-                    <button type="button" class="mobile-sheet-btn" onclick="quickUploadPhoto()">Upload Photo</button>
-                    <button type="button" class="mobile-sheet-btn" onclick="submitCommunityPost()">Submit Alert</button>
-                </div>
-                <select id="mobileCommunityTag" class="mobile-community-select">
-                    <option>Damaged Road</option>
-                    <option>Poor Lighting</option>
-                    <option>Water Logging</option>
-                    <option>Road Block</option>
-                    <option>Other</option>
-                </select>
-                <textarea id="mobileCommunityNote" class="mobile-community-note" placeholder="Short note for nearby users..."></textarea>
-                <div id="mobileSelectedImageInfo" class="mobile-selected-image"></div>
-                <div class="mobile-community-status" id="mobileCommunityStatus"></div>
-                <div class="mobile-feed-list" id="mobileCommunityFeed"></div>
-            </div>
         </div>
     </div>
 
@@ -1536,36 +1539,6 @@
                 </ul>
             </div>
 
-            <div class="panel community-panel">
-                <h3>Community Hazard Share</h3>
-                <div class="community-grid">
-                    <button type="button" class="community-upload-btn" 
-                            onclick="document.getElementById('communityImageInput').click()">
-                        📷 Upload Hazard Photo
-                    </button>
-
-                    <input class="community-file" type="file" id="communityImageInput" 
-                            accept="image/*" style="display: none;">
-
-                    <select id="communityTag">
-                        <option>Damaged Road</option>
-                        <option>Poor Lighting</option>
-                        <option>Water Logging</option>
-                        <option>Road Block</option>
-                        <option>Other</option>
-                    </select>
-
-                    <textarea id="communityNote" class="community-note" 
-                            placeholder="Short note for nearby users..."></textarea>
-
-                    <button class="community-post-btn" type="button" onclick="submitCommunityPost()">
-                        Submit Community Alert
-                    </button>
-
-                    <div class="community-status" id="communityStatus"></div>
-                    <div class="feed-list" id="communityFeed"></div>
-                </div>
-            </div>
         </div>
 
         <div class="right-stack">
@@ -1608,9 +1581,7 @@
 </div>
 
 <div class="mobile-quick-sheet" id="mobileQuickSheet">
-    <button class="mobile-sheet-btn" type="button" onclick="quickUploadPhoto()">Upload Photo</button>
-    <button class="mobile-sheet-btn" type="button" onclick="openCaptureCameraFullscreen()">Open Camera</button>
-    <button class="mobile-sheet-btn" type="button" onclick="submitCommunityPost()">Submit Community Alert</button>
+    <button class="mobile-sheet-btn" type="button" onclick="openAnalyzeCameraFullscreen()">Open Camera</button>
 </div>
 
 <div class="mobile-lang-sheet" id="mobileLangSheet">
@@ -1669,7 +1640,7 @@
     <img id="mobileCaptureImage" alt="Captured preview">
     <div class="mobile-capture-actions">
         <button type="button" onclick="retakeCapturedPhoto()">Retake</button>
-        <button type="button" onclick="submitCapturedAlertQuick()">Submit Alert</button>
+        <button type="button" onclick="closeLiveCameraFullscreen()">Close</button>
     </div>
 </div>
 
@@ -1697,7 +1668,7 @@
         <textarea id="feedbackComment" placeholder="What can we improve?" style="width:100%; height:100px; padding:10px; border-radius:8px; resize:vertical; margin-bottom:16px;"></textarea>
         
         <div style="display:flex; gap:12px; justify-content:flex-end;">
-            <button onclick="closeFeedbackModal()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:transparent; cursor:pointer;">Cancel</button>
+            <button id="feedbackCancelBtn" onclick="closeFeedbackModal()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:transparent; color:#0f172a; cursor:pointer;">Cancel</button>
             <button onclick="submitAppFeedback()" style="padding:10px 20px; border:none; border-radius:8px; background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; font-weight:600; cursor:pointer;">Submit</button>
         </div>
     </div>
@@ -1728,7 +1699,10 @@ function getLanguageDisplayName(langKey){
 
 function switchLanguage(lang) {
     if (!["en","te","hi"].includes(lang)) return;
-    
+
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
     currentVoiceLang = lang;
     localStorage.setItem(CURRENT_LANG_KEY, lang);
 
@@ -1737,13 +1711,6 @@ function switchLanguage(lang) {
         btn.classList.toggle('active', btn.id === `lang-${lang}`);
     });
 
-    // Speak confirmation in the NEW language
-    const confirmMsgs = {
-        en: "Voice language changed to English. Now speak in English only.",
-        te: "Voice language తెలుగు లో మార్చబడింది.",
-        hi: "वॉइस भाषा हिंदी में बदल दी गई।"
-    };
-    speakTextInLanguage(lang, confirmMsgs[lang]);
     setCameraStatus(`Language switched to ${getLanguageDisplayName(lang)}.`, "success");
     refreshMobileLanguageHint();
 }
@@ -1966,6 +1933,85 @@ function setCameraStatus(message, type=""){
     const subtitle=document.getElementById("mobileCamSubtitle");
     if(subtitle){
         subtitle.innerText=message;
+    }
+}
+
+let analysisDotsTimer=null;
+let analysisStageTimers=[];
+
+function clearAnalysisSubtitleAnimation(){
+    if(analysisDotsTimer){
+        clearInterval(analysisDotsTimer);
+        analysisDotsTimer=null;
+    }
+    analysisStageTimers.forEach((t)=>clearTimeout(t));
+    analysisStageTimers=[];
+    const subtitle=document.getElementById("mobileCamSubtitle");
+    if(subtitle){
+        subtitle.classList.remove("is-thinking");
+    }
+}
+
+function getVoiceLine(key){
+    const lines={
+        en:{
+            analyzing:"Analyzing scene now.",
+            vehicle_step:"Detecting vehicles now.",
+            crowd_step:"Detecting crowd and lighting now.",
+            sync_step:"Merging traffic and safety score now."
+        },
+        te:{
+            analyzing:"Ippudu scene ni analyze chesthunnanu.",
+            vehicle_step:"Ippudu vehicles detect chesthunnanu.",
+            crowd_step:"Ippudu crowd mariyu lighting detect chesthunnanu.",
+            sync_step:"Ippudu traffic mariyu safety score merge chesthunnanu."
+        },
+        hi:{
+            analyzing:"Ab scene ka vishleshan kar rahi hoon.",
+            vehicle_step:"Ab vehicles detect kar rahi hoon.",
+            crowd_step:"Ab crowd aur lighting detect kar rahi hoon.",
+            sync_step:"Ab traffic aur safety score merge kar rahi hoon."
+        }
+    };
+    return (lines[currentVoiceLang] && lines[currentVoiceLang][key]) || lines.en[key];
+}
+
+function setAnimatedSubtitle(baseText, type=""){
+    clearAnalysisSubtitleAnimation();
+    const subtitle=document.getElementById("mobileCamSubtitle");
+    if(subtitle){
+        subtitle.classList.add("is-thinking");
+    }
+    let dots=0;
+    setCameraStatus(`${baseText}...`, type);
+    analysisDotsTimer=setInterval(()=>{
+        dots=(dots+1)%4;
+        const dotText=".".repeat(dots || 1);
+        setCameraStatus(`${baseText}${dotText}`, type);
+    }, 320);
+}
+
+function startMobileAnalyzeSequence(mode){
+    if(!(isMobileCameraDevice() || document.body.classList.contains("camera-fullscreen-mode"))){
+        return;
+    }
+    setAnimatedSubtitle("Analyzing scene");
+    speakTextInLanguage(currentVoiceLang, getVoiceLine("analyzing"));
+
+    const midText = mode==="vehicle"
+        ? "Detecting vehicles"
+        : (mode==="crowd" ? "Detecting crowd and lighting" : "Detecting vehicles and crowd");
+    const midVoice = mode==="vehicle" ? "vehicle_step" : "crowd_step";
+    analysisStageTimers.push(setTimeout(()=>{
+        setAnimatedSubtitle(midText);
+        speakTextInLanguage(currentVoiceLang, getVoiceLine(midVoice));
+    }, 900));
+
+    if(mode==="autosync"){
+        analysisStageTimers.push(setTimeout(()=>{
+            setAnimatedSubtitle("Updating traffic and safety score");
+            speakTextInLanguage(currentVoiceLang, getVoiceLine("sync_step"));
+        }, 1700));
     }
 }
 
@@ -2574,7 +2620,10 @@ if (input && status) {
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
-            .then(registration => console.log('Service Worker registered'))
+            .then(registration => {
+                registration.update();
+                console.log('Service Worker registered');
+            })
             .catch(error => console.log('Service Worker failed', error));
     });
 }
@@ -2717,12 +2766,10 @@ function analyzeScene(mode="autosync"){
         return;
     }
 
-    const statusByMode={
-        vehicle:"Running Vehicle AI detection...",
-        crowd:"Running Crowd CV detection...",
-        autosync:"Running full Auto Sync (camera + traffic API + score merge)..."
-    };
-    setCameraStatus(statusByMode[mode] || "Analyzing scene...");
+    startMobileAnalyzeSequence(mode);
+    if(!(isMobileCameraDevice() || document.body.classList.contains("camera-fullscreen-mode"))){
+        setCameraStatus("Analyzing scene...");
+    }
 
     const payload={
         image:captureFrameImage(video),
@@ -2743,6 +2790,7 @@ function analyzeScene(mode="autosync"){
         return data;
     })
     .then(data=>{
+        clearAnalysisSubtitleAnimation();
         document.getElementById("lighting").value=data.lighting;
         document.getElementById("crowd").value=data.crowd;
         document.getElementById("traffic").value=data.traffic;
@@ -2753,21 +2801,20 @@ function analyzeScene(mode="autosync"){
         const apiMsg=data.traffic_api && data.traffic_api.available
             ? `traffic API: ${data.traffic_api.provider} (${data.traffic_api.traffic})`
             : `traffic API unavailable, fallback camera traffic: ${data.camera_traffic}`;
-        const detectorMsg=data.detector ? `detector: ${data.detector}` : "detector: unknown";
         const warningMsg=data.low_light_warning ? ` ${data.low_light_warning}` : "";
 
         if(mode==="vehicle"){
-            setCameraStatus(`Vehicle AI detected ${data.vehicle_count} vehicle(s) [${vehicleSummary}] using ${detectorMsg}. ${apiMsg}.${warningMsg}`,"success");
+            setCameraStatus(`Vehicle detected: ${data.vehicle_count}. Types: ${vehicleSummary}. ${apiMsg}.${warningMsg}`,"success");
             speakTextInLanguage(currentVoiceLang, `Vehicle analysis complete. Detected ${data.vehicle_count} vehicles.`);
             return;
         }
         if(mode==="crowd"){
-            setCameraStatus(`Crowd CV detected ${data.crowd_count} people -> ${data.crowd} crowd. Lighting: ${data.lighting}. ${detectorMsg}.${warningMsg}`,"success");
+            setCameraStatus(`Crowd detected: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${warningMsg}`,"success");
             speakTextInLanguage(currentVoiceLang, `Crowd analysis complete. Crowd is ${data.crowd}.`);
             return;
         }
 
-        setCameraStatus(`Auto Sync merged lighting (${data.lighting}), vehicles (${data.vehicle_count}), crowd (${data.crowd}), and traffic (${data.traffic}). ${detectorMsg}. Recalculating score...${warningMsg}`,"success");
+        setCameraStatus(`Auto Sync complete: Vehicles ${data.vehicle_count}, Crowd ${data.crowd}, Lighting ${data.lighting}, Traffic ${data.traffic}. Updating score...${warningMsg}`,"success");
         calculateSafety()
         .then((scoreData)=>{
             stopCamera();
@@ -2779,6 +2826,7 @@ function analyzeScene(mode="autosync"){
         });
     })
     .catch((error)=>{
+        clearAnalysisSubtitleAnimation();
         setCameraStatus(error.message || "Scene analysis failed. Please retry.","error");
     });
 }
@@ -2854,10 +2902,8 @@ navigator.geolocation.getCurrentPosition(function(position){
         setCameraStatus("External traffic API request failed; using manual selection.","error");
     });
 
-    loadCommunityPosts().catch(()=>{});
 },function(){
     setCameraStatus("GPS permission denied.","error");
-    loadCommunityPosts().catch(()=>{});
 });
 
 function toggleTheme(){
@@ -2957,7 +3003,6 @@ function mobileChooseLanguage(lang){
     switchLanguage(lang);
     localStorage.setItem(MOBILE_LANG_SELECTED_KEY, "true");
     closeMobileSheets();
-    startVoice();
 }
 
 function handleMobileMic(){

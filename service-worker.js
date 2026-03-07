@@ -1,72 +1,63 @@
-﻿// service-worker.js
-const CACHE_NAME = 'safety-audit-v3-2026';
+// service-worker.js
+const CACHE_NAME = "safety-audit-v4-2026";
 const urlsToCache = [
-  '/',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-  // Add more important static assets if you have them separated
-  // Example: if your CSS/JS are in /static/
-  // '/static/index.css',
-  // '/static/app.js'
+  "/manifest.json",
+  "/icon-192.png",
+  "/icon-512.png"
 ];
 
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
   );
+  self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    caches.keys().then((cacheNames) =>
+      Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
+          if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
+          return Promise.resolve();
         })
-      );
-    })
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") {
+    return;
+  }
+
+  // Always fetch latest HTML from network so UI/JS updates are immediate after deploy.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match("/"))
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
+    caches.match(event.request).then((cached) => {
+      if (cached) {
+        return cached;
+      }
+
+      return fetch(event.request).then((response) => {
+        if (!response || response.status !== 200 || response.type !== "basic") {
           return response;
         }
 
-        // Clone the request because it's a stream that can only be consumed once
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest).then(
-          (response) => {
-            // Check if we received a valid response
-            if(!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-
-            // Clone the response again because we need to consume it twice
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-
-            return response;
-          }
-        );
-      })
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+        return response;
+      });
+    })
   );
 });
-

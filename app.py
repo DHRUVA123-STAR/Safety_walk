@@ -44,6 +44,7 @@ _vehicle_net_lock = threading.Lock()
 _hog_detector = None
 _yolo_model = None
 _yolo_model_lock = threading.Lock()
+_yolo_disabled = False
 YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8n.pt")
 
 # Lightweight .env loader
@@ -75,7 +76,7 @@ def is_urban_area(lat, lon):
     distance = math.sqrt((lat - CITY_LAT) ** 2 + (lon - CITY_LON) ** 2)
     return distance < 0.1
 
-def calculate_score(area, lighting, traffic, crowd, vehicle_count=0, community_penalty=0, community_reasons=None):
+def calculate_score(area, lighting, traffic, crowd, vehicle_count=0):
     score = 100
     reasons = []
 
@@ -106,11 +107,6 @@ def calculate_score(area, lighting, traffic, crowd, vehicle_count=0, community_p
     if current_hour < 6 or current_hour > 18:
         score -= 10
         reasons.append("Night time reduces safety.")
-
-    if community_penalty > 0:
-        score -= community_penalty
-        if community_reasons:
-            reasons.extend(community_reasons)
 
     score = max(0, min(score, 100))
 
@@ -198,14 +194,20 @@ def detect_crowd_opencv(img):
     return people_count, crowd_label
 
 def get_yolo_detector():
-    global _yolo_model
+    global _yolo_model, _yolo_disabled
     if _yolo_model is not None:
         return _yolo_model
+    if _yolo_disabled:
+        raise RuntimeError("YOLO disabled after previous load failure")
     if YOLO is None:
         raise RuntimeError("ultralytics not installed")
     with _yolo_model_lock:
         if _yolo_model is None:
-            _yolo_model = YOLO(YOLO_MODEL_NAME)
+            try:
+                _yolo_model = YOLO(YOLO_MODEL_NAME)
+            except Exception:
+                _yolo_disabled = True
+                raise
     return _yolo_model
 
 def preprocess_for_detection(img):
@@ -246,7 +248,16 @@ def yolo_conf_threshold(brightness):
 def detect_scene_yolo(img, brightness):
     detector = get_yolo_detector()
     conf = yolo_conf_threshold(brightness)
-    results = detector.predict(source=img, conf=conf, iou=0.5, verbose=False, imgsz=960)
+    # Restrict to traffic/person classes and smaller input for Render stability.
+    # COCO ids: person=0, bicycle=1, car=2, motorcycle=3, bus=5, truck=7
+    results = detector.predict(
+        source=img,
+        conf=conf,
+        iou=0.5,
+        verbose=False,
+        imgsz=640,
+        classes=[0, 1, 2, 3, 5, 7]
+    )
 
     vehicles_by_type = {}
     people_count = 0
@@ -566,23 +577,13 @@ def calculate_score_api():
     traffic = data.get("traffic")
     crowd = data.get("crowd")
     vehicle_count = int(data.get("vehicle_count", 0))
-    lat = data.get("lat")
-    lon = data.get("lon")
-    lat = float(lat) if lat is not None else None
-    lon = float(lon) if lon is not None else None
-    community_penalty, community_reasons = compute_community_penalty(lat, lon)
-
-    score, safety_level, reasons = calculate_score(
-        area, lighting, traffic, crowd, vehicle_count,
-        community_penalty=community_penalty,
-        community_reasons=community_reasons
-    )
+    score, safety_level, reasons = calculate_score(area, lighting, traffic, crowd, vehicle_count)
 
     return jsonify({
         "score": score,
         "safety_level": safety_level,
         "reasons": reasons,
-        "community_penalty": community_penalty
+        "community_penalty": 0
     })
 
 @app.route("/external-traffic", methods=["POST"])
