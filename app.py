@@ -71,6 +71,21 @@ if not os.getenv("TOMTOM_API_KEY"):
 def log_service_status():
     print(f"TOMTOM_API_KEY set: {bool(os.getenv('TOMTOM_API_KEY'))}")
     print(f"YOLO available: {YOLO is not None} ({YOLO_MODEL_NAME})")
+    model_candidate_paths = []
+    if os.path.isabs(YOLO_MODEL_NAME):
+        model_candidate_paths.append(YOLO_MODEL_NAME)
+    else:
+        model_candidate_paths.append(os.path.join(BASE_DIR, YOLO_MODEL_NAME))
+        model_candidate_paths.append(os.path.abspath(YOLO_MODEL_NAME))
+
+    local_model_path = next((p for p in model_candidate_paths if os.path.exists(p)), None)
+    if local_model_path:
+        print(f"YOLO model status: local file found at {local_model_path}")
+    else:
+        print(
+            "YOLO model status: local file not found. "
+            "Ultralytics will auto-download model on first detection request."
+        )
 
 def is_urban_area(lat, lon):
     distance = math.sqrt((lat - CITY_LAT) ** 2 + (lon - CITY_LON) ** 2)
