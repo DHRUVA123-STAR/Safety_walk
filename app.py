@@ -255,7 +255,7 @@ def detect_scene_yolo(img, brightness):
         conf=conf,
         iou=0.5,
         verbose=False,
-        imgsz=640,
+        imgsz=512,
         classes=[0, 1, 2, 3, 5, 7]
     )
 
@@ -304,7 +304,7 @@ def merge_traffic_signals(camera_traffic, traffic_api):
 def estimate_traffic_from_vehicles(vehicle_count):
     return "High" if vehicle_count >= 3 else "Low"
 
-def fetch_external_traffic(lat, lon):
+def fetch_external_traffic(lat, lon, timeout_sec=8):
     api_key = os.getenv("TOMTOM_API_KEY")
     if not api_key:
         return {
@@ -321,7 +321,7 @@ def fetch_external_traffic(lat, lon):
 
     try:
         ssl_context = ssl.create_default_context(cafile=certifi.where())
-        with urllib.request.urlopen(endpoint, timeout=8, context=ssl_context) as response:
+        with urllib.request.urlopen(endpoint, timeout=timeout_sec, context=ssl_context) as response:
             payload = json.loads(response.read().decode("utf-8"))
 
         flow_data = payload.get("flowSegmentData", {})
@@ -345,7 +345,7 @@ def fetch_external_traffic(lat, lon):
         if allow_insecure:
             try:
                 insecure_context = ssl._create_unverified_context()
-                with urllib.request.urlopen(endpoint, timeout=8, context=insecure_context) as response:
+                with urllib.request.urlopen(endpoint, timeout=timeout_sec, context=insecure_context) as response:
                     payload = json.loads(response.read().decode("utf-8"))
 
                 flow_data = payload.get("flowSegmentData", {})
@@ -746,12 +746,16 @@ def analyze_scene():
             detector_used = "mobilenet_hog"
 
         camera_traffic = estimate_traffic_from_vehicles(vehicle_count)
+        mode = (data.get("mode") or "autosync").lower()
         lat = data.get("lat")
         lon = data.get("lon")
 
-        traffic_api = {"available": False, "message": "Location not provided."}
-        if lat is not None and lon is not None:
-            traffic_api = fetch_external_traffic(float(lat), float(lon))
+        traffic_api = {"available": False, "message": "Traffic API skipped for quick camera mode."}
+        if mode == "autosync":
+            traffic_api = {"available": False, "message": "Location not provided."}
+            if lat is not None and lon is not None:
+                # Keep Auto Sync responsive on mobile/network by limiting wait time.
+                traffic_api = fetch_external_traffic(float(lat), float(lon), timeout_sec=2.5)
 
         final_traffic, traffic_source = merge_traffic_signals(camera_traffic, traffic_api)
         low_light_warning = (
