@@ -262,7 +262,7 @@ def yolo_conf_threshold(brightness):
         return 0.30
     return 0.35
 
-def detect_scene_yolo(img, brightness):
+def detect_scene_yolo(img, brightness, allow_fast_empty=True):
     detector = get_yolo_detector()
     conf = yolo_conf_threshold(brightness)
     # COCO ids: person=0, bicycle=1, car=2, motorcycle=3, bus=5, truck=7
@@ -309,7 +309,7 @@ def detect_scene_yolo(img, brightness):
         max_det=12
     )
     quick_vehicle_count, quick_vehicles_by_type, quick_people_count, quick_crowd = parse_results(quick_results)
-    if quick_vehicle_count == 0 and quick_people_count == 0:
+    if allow_fast_empty and quick_vehicle_count == 0 and quick_people_count == 0:
         return quick_vehicle_count, quick_vehicles_by_type, quick_people_count, quick_crowd, "yolov8n-fast-empty"
 
     # Full pass only when quick pass detects likely objects.
@@ -770,11 +770,15 @@ def analyze_scene():
         if img is None:
             return jsonify({"ok": False, "message": "Unable to decode image frame on server."}), 400
 
+        mode = (data.get("mode") or "autosync").lower()
         processed_img = preprocess_for_detection(img)
         lighting, brightness = detect_lighting(processed_img)
         detector_used = "fallback"
         try:
-            vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(processed_img, brightness)
+            use_fast_empty = mode != "mobile_detect"
+            vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(
+                processed_img, brightness, allow_fast_empty=use_fast_empty
+            )
             detector_used = yolo_mode
         except Exception:
             vehicle_count, vehicles_by_type = detect_vehicles_dnn(processed_img, confidence_threshold=0.30)
@@ -782,7 +786,6 @@ def analyze_scene():
             detector_used = "mobilenet_hog"
 
         camera_traffic = estimate_traffic_from_vehicles(vehicle_count)
-        mode = (data.get("mode") or "autosync").lower()
         lat = data.get("lat")
         lon = data.get("lon")
 

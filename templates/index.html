@@ -2006,7 +2006,7 @@ function setAnimatedSubtitle(baseText, type=""){
         dots=(dots+1)%4;
         const dotText=".".repeat(dots || 1);
         setCameraStatus(`${baseText}${dotText}`, type);
-    }, 320);
+    }, 360);
 }
 
 function startMobileAnalyzeSequence(mode){
@@ -2023,7 +2023,7 @@ function startMobileAnalyzeSequence(mode){
     analysisStageTimers.push(setTimeout(()=>{
         setAnimatedSubtitle(midText);
         speakTextInLanguage(currentVoiceLang, getVoiceLine(midVoice));
-    }, 900));
+    }, 1050));
 
     if(mode==="autosync"){
         analysisStageTimers.push(setTimeout(()=>{
@@ -2832,6 +2832,17 @@ function analyzeScene(mode="autosync"){
             speakTextInLanguage(currentVoiceLang, `Crowd analysis complete. Crowd is ${data.crowd}.`);
             return;
         }
+        if(mode==="mobile_detect"){
+            setCameraStatus(
+                `Detected vehicles: ${data.vehicle_count} (${vehicleSummary}). Crowd: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${warningMsg}`,
+                "success"
+            );
+            speakTextInLanguage(
+                currentVoiceLang,
+                `Detection complete. Vehicles ${data.vehicle_count}. People ${data.crowd_count}. Crowd is ${data.crowd}.`
+            );
+            return;
+        }
 
         setCameraStatus(`Auto Sync complete: Vehicles ${data.vehicle_count}, Crowd ${data.crowd}, Lighting ${data.lighting}, Traffic ${data.traffic}. Updating score...${warningMsg}`,"success");
         calculateSafety()
@@ -3095,7 +3106,7 @@ function mobilePrimaryCameraAction(){
         speakTextInLanguage(currentVoiceLang, "Photo captured successfully.");
         return;
     }
-    analyzeScene("autosync");
+    analyzeScene("mobile_detect");
 }
 
 function retakeCapturedPhoto(){
@@ -3149,6 +3160,17 @@ async function primeMicrophoneForVoice(){
 function isMobileCameraDevice(){
     const ua=(navigator.userAgent || "").toLowerCase();
     return /android|iphone|ipad|ipod|mobile/.test(ua) || (navigator.maxTouchPoints || 0) > 1;
+}
+
+function buildMobileVideoConstraints(preferExact=true){
+    const facing = preferExact ? {exact: mobileFacingMode} : {ideal: mobileFacingMode};
+    return {
+        facingMode: facing,
+        width: {ideal: 1280, max: 1920},
+        height: {ideal: 720, max: 1080},
+        frameRate: {ideal: 24, max: 30},
+        advanced: [{focusMode: "continuous"}]
+    };
 }
 
 async function refreshVideoInputs(){
@@ -3207,12 +3229,12 @@ async function switchMobileCamera(video){
         let nextStream=null;
         try{
             nextStream=await navigator.mediaDevices.getUserMedia({
-                video:{facingMode:{exact:mobileFacingMode}},
+                video:buildMobileVideoConstraints(true),
                 audio:false
             });
         }catch(_exactErr){
             nextStream=await navigator.mediaDevices.getUserMedia({
-                video:{facingMode:{ideal:mobileFacingMode}},
+                video:buildMobileVideoConstraints(false),
                 audio:false
             });
         }
@@ -3243,7 +3265,13 @@ async function switchMobileCamera(video){
             const nextIndex=(activeVideoInputIndex+1) % availableVideoInputs.length;
             const nextDevice=availableVideoInputs[nextIndex];
             const nextStream=await navigator.mediaDevices.getUserMedia({
-                video:{deviceId:{exact:nextDevice.deviceId}},
+                video:{
+                    deviceId:{exact:nextDevice.deviceId},
+                    width:{ideal:1280,max:1920},
+                    height:{ideal:720,max:1080},
+                    frameRate:{ideal:24,max:30},
+                    advanced:[{focusMode:"continuous"}]
+                },
                 audio:false
             });
             if(videoStream){
@@ -3301,12 +3329,12 @@ async function openCamera(allowSwitch=false){
             try{
                 try{
                     stream=await navigator.mediaDevices.getUserMedia({
-                        video:{facingMode:{exact:mobileFacingMode}},
+                        video:buildMobileVideoConstraints(true),
                         audio:false
                     });
                 }catch(_exactInitialErr){
                     stream=await navigator.mediaDevices.getUserMedia({
-                        video:{facingMode:{ideal:mobileFacingMode}},
+                        video:buildMobileVideoConstraints(false),
                         audio:false
                     });
                 }
