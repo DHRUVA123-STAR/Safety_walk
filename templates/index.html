@@ -2009,12 +2009,12 @@ function setAnimatedSubtitle(baseText, type=""){
     }, 360);
 }
 
-function startMobileAnalyzeSequence(mode){
-    if(!(isMobileCameraDevice() || document.body.classList.contains("camera-fullscreen-mode"))){
-        return;
-    }
+function startAnalyzeSequence(mode){
+    const shouldSpeak = isMobileCameraDevice() || document.body.classList.contains("camera-fullscreen-mode");
     setAnimatedSubtitle("Analyzing scene");
-    speakTextInLanguage(currentVoiceLang, getVoiceLine("analyzing"));
+    if(shouldSpeak){
+        speakTextInLanguage(currentVoiceLang, getVoiceLine("analyzing"));
+    }
 
     const midText = mode==="vehicle"
         ? "Detecting vehicles"
@@ -2022,13 +2022,17 @@ function startMobileAnalyzeSequence(mode){
     const midVoice = mode==="vehicle" ? "vehicle_step" : "crowd_step";
     analysisStageTimers.push(setTimeout(()=>{
         setAnimatedSubtitle(midText);
-        speakTextInLanguage(currentVoiceLang, getVoiceLine(midVoice));
+        if(shouldSpeak){
+            speakTextInLanguage(currentVoiceLang, getVoiceLine(midVoice));
+        }
     }, 1050));
 
     if(mode==="autosync"){
         analysisStageTimers.push(setTimeout(()=>{
             setAnimatedSubtitle("Updating traffic and safety score");
-            speakTextInLanguage(currentVoiceLang, getVoiceLine("sync_step"));
+            if(shouldSpeak){
+                speakTextInLanguage(currentVoiceLang, getVoiceLine("sync_step"));
+            }
         }, 1700));
     }
 }
@@ -2784,10 +2788,7 @@ function analyzeScene(mode="autosync"){
         return;
     }
 
-    startMobileAnalyzeSequence(mode);
-    if(!(isMobileCameraDevice() || document.body.classList.contains("camera-fullscreen-mode"))){
-        setCameraStatus("Analyzing scene...");
-    }
+    startAnalyzeSequence(mode);
 
     const payload={
         image:captureFrameImage(video),
