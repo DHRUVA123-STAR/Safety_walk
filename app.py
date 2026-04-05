@@ -1,8 +1,5 @@
 ﻿from flask import Flask, render_template, request, jsonify, send_from_directory, Response
-from functools import wraps
-from flask import redirect, session, url_for
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import math
 import cv2
 import numpy as np
@@ -33,7 +30,6 @@ CITY_LON = 80.6480
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIRESTORE_TIMEOUT_SEC = float(os.getenv("FIRESTORE_TIMEOUT_SEC", "8"))
 ANALYZE_MAX_DIM = int(os.getenv("ANALYZE_MAX_DIM", "640"))
-ADMIN_DATA_TIMEOUT_SEC = float(os.getenv("ADMIN_DATA_TIMEOUT_SEC", "4.5"))
 
 # Lightweight .env loader
 def load_local_env():
@@ -52,7 +48,6 @@ def load_local_env():
                 os.environ[key] = value
 
 load_local_env()
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "local-admin-secret-key")
 
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
@@ -102,13 +97,6 @@ _yolo_model = None
 _yolo_model_lock = threading.Lock()
 _yolo_disabled = False
 YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8n.pt")
-_admin_dashboard_cache = {
-    "feedbacks": [],
-    "user_count": "--",
-    "avg_rating": 0,
-    "posts": []
-}
-_admin_dashboard_cache_lock = threading.Lock()
 
 def log_service_status():
     print(f"TOMTOM_API_KEY set: {bool(os.getenv('TOMTOM_API_KEY'))}")
@@ -867,29 +855,6 @@ def count_fcm_users(max_docs=1000, timeout_sec=None):
         print(f"FCM token count error: {e}")
         return 0
 
-def fetch_admin_feedbacks(timeout_sec=None):
-    feedbacks = []
-    avg_rating = 0
-    if not db:
-        return feedbacks, avg_rating
-    timeout_sec = timeout_sec or ADMIN_DATA_TIMEOUT_SEC
-    try:
-        f_docs = db.collection('app_feedback').order_by(
-            'created_at',
-            direction=firestore.Query.DESCENDING
-        ).limit(100).stream(timeout=timeout_sec)
-        total_stars = 0
-        for doc in f_docs:
-            data = doc.to_dict()
-            data['id'] = doc.id
-            feedbacks.append(data)
-            total_stars += data.get('rating', 0)
-        if feedbacks:
-            avg_rating = round(total_stars / len(feedbacks), 1)
-    except Exception as e:
-        print(f"Admin feedback fetch error: {e}")
-    return feedbacks, avg_rating
-
 def compute_community_penalty(lat, lon):
     if lat is None or lon is None:
         return 0, []
@@ -1146,154 +1111,6 @@ def submit_app_feedback():
         })
 
     return jsonify({"ok": True, "message": "Feedback received. Thank you!"})
-
-def check_admin_auth(username, password):
-    admin_user = os.getenv("ADMIN_USERNAME")
-    admin_pass = os.getenv("ADMIN_PASSWORD")
-    # If credentials are not set in the environment, deny all access to be safe.
-    if not admin_user or not admin_pass:
-        return False
-    return username == admin_user and password == admin_pass
-
-def requires_admin_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get("admin_authenticated"):
-            return redirect(url_for("admin_login", next=request.path))
-        return f(*args, **kwargs)
-    return decorated
-
-@app.route("/admin/login", methods=["GET", "POST"])
-def admin_login():
-    error_message = ""
-    next_url = request.args.get("next") or request.form.get("next") or url_for("admin_dashboard")
-
-    if session.get("admin_authenticated"):
-        return redirect(next_url)
-
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = request.form.get("password") or ""
-        if check_admin_auth(username, password):
-            session["admin_authenticated"] = True
-            session["admin_username"] = username
-            return redirect(next_url)
-        error_message = "Invalid username or password."
-
-    return render_template("admin_login.html", error_message=error_message, next_url=next_url)
-
-@app.route("/admin/logout", methods=["POST"])
-def admin_logout():
-    session.pop("admin_authenticated", None)
-    session.pop("admin_username", None)
-    return redirect(url_for("admin_login"))
-
-@app.route("/admin", methods=["GET"])
-@requires_admin_auth
-def admin_dashboard():
-    yolo_status = YOLO is not None
-    tomtom_status = bool(os.getenv("TOMTOM_API_KEY"))
-    dashboard_data = get_admin_dashboard_data()
-    return render_template(
-        "admin.html",
-        yolo_status=yolo_status,
-        tomtom_status=tomtom_status,
-        feedbacks=dashboard_data["feedbacks"],
-        user_count=dashboard_data["user_count"],
-        avg_rating=dashboard_data["avg_rating"],
-        posts=dashboard_data["posts"]
-    )
-
-def get_admin_dashboard_data():
-    with _admin_dashboard_cache_lock:
-        cached = {
-            "feedbacks": list(_admin_dashboard_cache.get("feedbacks", [])),
-            "user_count": _admin_dashboard_cache.get("user_count", "--"),
-            "avg_rating": _admin_dashboard_cache.get("avg_rating", 0),
-            "posts": list(_admin_dashboard_cache.get("posts", []))
-        }
-
-    if not db:
-        return cached
-
-    result = dict(cached)
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        future_feedbacks = executor.submit(fetch_admin_feedbacks, ADMIN_DATA_TIMEOUT_SEC)
-        future_users = executor.submit(count_fcm_users, 1000, ADMIN_DATA_TIMEOUT_SEC)
-        future_posts = executor.submit(fetch_posts_with_reactions, ADMIN_DATA_TIMEOUT_SEC)
-
-        try:
-            feedbacks, avg_rating = future_feedbacks.result(timeout=ADMIN_DATA_TIMEOUT_SEC)
-            result["feedbacks"] = feedbacks
-            result["avg_rating"] = avg_rating
-        except FuturesTimeoutError:
-            print("Admin feedback fetch timed out; using cached snapshot.")
-        except Exception as e:
-            print(f"Admin feedback future error: {e}")
-
-        try:
-            result["user_count"] = future_users.result(timeout=ADMIN_DATA_TIMEOUT_SEC)
-        except FuturesTimeoutError:
-            print("Admin user count fetch timed out; using cached snapshot.")
-        except Exception as e:
-            print(f"Admin user count future error: {e}")
-
-        try:
-            result["posts"] = future_posts.result(timeout=ADMIN_DATA_TIMEOUT_SEC)
-        except FuturesTimeoutError:
-            print("Admin posts fetch timed out; using cached snapshot.")
-        except Exception as e:
-            print(f"Admin posts future error: {e}")
-
-    with _admin_dashboard_cache_lock:
-        _admin_dashboard_cache.update({
-            "feedbacks": list(result["feedbacks"]),
-            "user_count": result["user_count"],
-            "avg_rating": result["avg_rating"],
-            "posts": list(result["posts"])
-        })
-
-    return result
-
-@app.route("/admin/data", methods=["GET"])
-@requires_admin_auth
-def admin_data():
-    return jsonify(get_admin_dashboard_data())
-
-@app.route("/admin/broadcast", methods=["POST"])
-@requires_admin_auth
-def admin_broadcast():
-    data = request.json or {}
-    title = data.get("title", "Safety Alert")
-    body = data.get("message", "")
-    if not body or not db:
-        return jsonify({"ok": False, "message": "Message body is required."})
-    
-    try:
-        tokens_query = db.collection("fcm_tokens").stream()
-        tokens = [doc.to_dict().get("token") for doc in tokens_query if doc.to_dict().get("token")]
-        if not tokens:
-            return jsonify({"ok": False, "message": "No subscribed users found."})
-        
-        success_count = 0
-        for i in range(0, len(tokens), 500):
-            chunk = tokens[i:i+500]
-            message = messaging.MulticastMessage(notification=messaging.Notification(title=title, body=body), tokens=chunk)
-            response = messaging.send_multicast(message)
-            success_count += response.success_count
-            
-        return jsonify({"ok": True, "message": f"Broadcast successfully sent to {success_count} active devices!"})
-    except Exception as e:
-        return jsonify({"ok": False, "message": f"Broadcast failed: {str(e)}"})
-
-@app.route("/admin/cleanup", methods=["POST"])
-@requires_admin_auth
-def admin_cleanup():
-    try:
-        cleanup_old_alerts()
-        return jsonify({"ok": True, "message": "Old alerts older than 7 days have been permanently deleted."})
-    except Exception as e:
-        return jsonify({"ok": False, "message": f"Cleanup failed: {str(e)}"})
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
