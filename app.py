@@ -1139,15 +1139,22 @@ def requires_admin_auth(f):
 def admin_dashboard():
     yolo_status = YOLO is not None
     tomtom_status = bool(os.getenv("TOMTOM_API_KEY"))
-    return render_template("admin.html", yolo_status=yolo_status, tomtom_status=tomtom_status)
+    dashboard_data = get_admin_dashboard_data()
+    return render_template(
+        "admin.html",
+        yolo_status=yolo_status,
+        tomtom_status=tomtom_status,
+        feedbacks=dashboard_data["feedbacks"],
+        user_count=dashboard_data["user_count"],
+        avg_rating=dashboard_data["avg_rating"],
+        posts=dashboard_data["posts"]
+    )
 
-@app.route("/admin/data", methods=["GET"])
-@requires_admin_auth
-def admin_data():
+def get_admin_dashboard_data():
     feedbacks = []
     user_count = "-"
     avg_rating = 0
-    
+
     if db:
         try:
             f_docs = db.collection('app_feedback').order_by(
@@ -1168,13 +1175,17 @@ def admin_data():
             print(f"Admin fetch error: {e}")
 
     posts = fetch_posts_with_reactions()
-    
-    return jsonify({
+    return {
         "feedbacks": feedbacks,
         "user_count": user_count,
         "avg_rating": avg_rating,
         "posts": posts
-    })
+    }
+
+@app.route("/admin/data", methods=["GET"])
+@requires_admin_auth
+def admin_data():
+    return jsonify(get_admin_dashboard_data())
 
 @app.route("/admin/broadcast", methods=["POST"])
 @requires_admin_auth
