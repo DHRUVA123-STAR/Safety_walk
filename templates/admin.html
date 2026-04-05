@@ -119,7 +119,13 @@
                 <h2 style="margin: 0; border: none; padding: 0;">Alert Moderation</h2>
                 <input type="text" id="alertSearchInput" onkeyup="filterAlerts()" placeholder="Search tags, notes, dates..." style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; width: 100%; max-width: 250px; margin-top: 10px;">
             </div>
-            <p class="refresh-note" id="refreshNote">Opening dashboard and loading latest admin data.</p>
+            <p class="refresh-note" id="refreshNote">
+                {% if posts or feedbacks or user_count != '--' %}
+                    Dashboard ready. Admin data updates automatically.
+                {% else %}
+                    Opening dashboard and loading latest admin data.
+                {% endif %}
+            </p>
             <div class="table-container">
                 <table id="alertsTable">
                     <thead>
@@ -156,7 +162,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="5" style="text-align: center; color: #64748b; padding: 30px;">Loading latest community alerts.</td>
+                                <td colspan="5" style="text-align: center; color: #64748b; padding: 30px;">No active community alerts.</td>
                             </tr>
                         {% endif %}
                     </tbody>
@@ -204,7 +210,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="3" style="text-align: center; color: #64748b; padding: 30px;">Loading latest user feedback.</td>
+                                <td colspan="3" style="text-align: center; color: #64748b; padding: 30px;">No feedback received yet.</td>
                             </tr>
                         {% endif %}
                     </tbody>

@@ -1193,14 +1193,15 @@ def admin_logout():
 def admin_dashboard():
     yolo_status = YOLO is not None
     tomtom_status = bool(os.getenv("TOMTOM_API_KEY"))
+    dashboard_data = get_admin_dashboard_data()
     return render_template(
         "admin.html",
         yolo_status=yolo_status,
         tomtom_status=tomtom_status,
-        feedbacks=[],
-        user_count="--",
-        avg_rating="--",
-        posts=[]
+        feedbacks=dashboard_data["feedbacks"],
+        user_count=dashboard_data["user_count"],
+        avg_rating=dashboard_data["avg_rating"],
+        posts=dashboard_data["posts"]
     )
 
 def get_admin_dashboard_data():
