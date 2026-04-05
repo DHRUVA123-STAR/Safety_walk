@@ -1,5 +1,6 @@
-﻿from flask import Flask, render_template, request, jsonify, send_from_directory
-from datetime import datetime
+﻿from flask import Flask, render_template, request, jsonify, send_from_directory, Response
+from functools import wraps
+from datetime import datetime, timedelta
 import math
 import cv2
 import numpy as np
@@ -11,9 +12,13 @@ import urllib.request
 import threading
 import ssl
 import certifi
-import sqlite3
 import uuid
 from werkzeug.utils import secure_filename
+import cloudinary
+import cloudinary.uploader
+import firebase_admin
+from firebase_admin import credentials, firestore, messaging
+
 try:
     from ultralytics import YOLO
 except Exception:
@@ -24,28 +29,6 @@ app = Flask(__name__)
 CITY_LAT = 16.5062
 CITY_LON = 80.6480
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(BASE_DIR, "models")
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-DB_PATH = os.path.join(BASE_DIR, "community.db")
-PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
-CAFFE_MODEL_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.caffemodel")
-PROTO_URL = "https://raw.githubusercontent.com/chuanqi305/MobileNet-SSD/master/MobileNetSSD_deploy.prototxt"
-CAFFE_MODEL_URL = "https://github.com/chuanqi305/MobileNet-SSD/raw/master/MobileNetSSD_deploy.caffemodel"
-
-MOBILENET_CLASSES = [
-    "background", "aeroplane", "bicycle", "bird", "boat", "bottle",
-    "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse",
-    "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"
-]
-VEHICLE_CLASSES = {"bicycle", "bus", "car", "motorbike", "train"}
-
-_vehicle_net = None
-_vehicle_net_lock = threading.Lock()
-_hog_detector = None
-_yolo_model = None
-_yolo_model_lock = threading.Lock()
-_yolo_disabled = False
-YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8n.pt")
 
 # Lightweight .env loader
 def load_local_env():
@@ -65,8 +48,54 @@ def load_local_env():
 
 load_local_env()
 
-if not os.getenv("TOMTOM_API_KEY"):
-    os.environ["TOMTOM_API_KEY"] = "1KJRcaiieEGOw93WYtLK20Vep8rHO8DR"
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
+CAFFE_MODEL_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.caffemodel")
+PROTO_URL = "https://raw.githubusercontent.com/chuanqi305/MobileNet-SSD/master/MobileNetSSD_deploy.prototxt"
+CAFFE_MODEL_URL = "https://github.com/chuanqi305/MobileNet-SSD/raw/master/MobileNetSSD_deploy.caffemodel"
+
+# Cloudinary Config
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
+
+# Firebase Config
+firebase_creds_env = os.getenv("FIREBASE_CREDENTIALS")
+if firebase_creds_env:
+    # Production: Read from Railway Environment Variable
+    cred_dict = json.loads(firebase_creds_env)
+    cred = credentials.Certificate(cred_dict)
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(cred)
+    db = firestore.client()
+else:
+    # Local Development: Read from physical file
+    cred_path = os.path.join(BASE_DIR, "firebase-adminsdk.json")
+    if os.path.exists(cred_path):
+        cred = credentials.Certificate(cred_path)
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+        db = firestore.client()
+    else:
+        db = None
+        print("WARNING: firebase-adminsdk.json not found and FIREBASE_CREDENTIALS not set!")
+
+MOBILENET_CLASSES = [
+    "background", "aeroplane", "bicycle", "bird", "boat", "bottle",
+    "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse",
+    "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"
+]
+VEHICLE_CLASSES = {"bicycle", "bus", "car", "motorbike", "train"}
+
+_vehicle_net = None
+_vehicle_net_lock = threading.Lock()
+_hog_detector = None
+_yolo_model = None
+_yolo_model_lock = threading.Lock()
+_yolo_disabled = False
+YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8n.pt")
 
 def log_service_status():
     print(f"TOMTOM_API_KEY set: {bool(os.getenv('TOMTOM_API_KEY'))}")
@@ -414,59 +443,6 @@ def fetch_external_traffic(lat, lon, timeout_sec=8):
             "message": f"Traffic API SSL/Network error: {str(exc)}. Set ALLOW_INSECURE_SSL_FOR_DEV=true for local testing."
         }
 
-def init_storage():
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS posts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                image_url TEXT NOT NULL,
-                lat REAL NOT NULL,
-                lon REAL NOT NULL,
-                tag TEXT NOT NULL,
-                note TEXT,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                post_id INTEGER NOT NULL,
-                user_token TEXT NOT NULL,
-                reaction_type TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                UNIQUE(post_id, user_token),
-                FOREIGN KEY(post_id) REFERENCES posts(id)
-            )
-            """
-        )
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ New tables for feedback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS helpful_feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                post_id INTEGER NOT NULL,
-                user_token TEXT NOT NULL,
-                helpful BOOLEAN NOT NULL,
-                created_at TEXT NOT NULL,
-                UNIQUE(post_id, user_token),
-                FOREIGN KEY(post_id) REFERENCES posts(id)
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS app_feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_token TEXT NOT NULL,
-                rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
-                comment TEXT,
-                created_at TEXT NOT NULL
-            )
-        """)
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        conn.commit()
-
 def decode_data_url_image(image_data_url):
     if not image_data_url or "," not in image_data_url:
         raise ValueError("Invalid image payload.")
@@ -477,19 +453,321 @@ def decode_data_url_image(image_data_url):
         raise ValueError("Unable to decode image.")
     return image
 
-def save_uploaded_community_image(image_data_url):
-    image = decode_data_url_image(image_data_url)
-    filename = secure_filename(f"{uuid.uuid4().hex}.jpg")
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    ok = cv2.imwrite(file_path, image)
-    if not ok:
-        raise RuntimeError("Failed to write image file.")
-    return f"/uploads/{filename}"
+def detect_faces_haar(image_bgr):
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+    if face_cascade.empty():
+        return []
+    faces = face_cascade.detectMultiScale(
+        gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(36, 36)
+    )
+    return faces
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def detect_document_like_image(image_bgr):
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 60, 160)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    img_h, img_w = gray.shape[:2]
+    img_area = float(img_h * img_w)
+
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < img_area * 0.18:
+            continue
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.03 * peri, True)
+        if len(approx) != 4:
+            continue
+
+        x, y, w, h = cv2.boundingRect(approx)
+        rect_area_ratio = (w * h) / img_area
+        if rect_area_ratio < 0.22:
+            continue
+
+        aspect = w / max(h, 1)
+        if 0.62 <= aspect <= 1.9:
+            return True
+    return False
+
+def estimate_text_block_ratio(image_bgr):
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    grad_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    grad_x = cv2.convertScaleAbs(grad_x)
+    _, thresh = cv2.threshold(grad_x, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 3))
+    merged = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
+    merged = cv2.medianBlur(merged, 3)
+    return float(np.mean(merged > 0))
+
+def detect_screen_like_capture(image_bgr):
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    img_h, img_w = gray.shape[:2]
+    img_area = float(img_h * img_w)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 50, 150)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    best_rect_ratio = 0.0
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < img_area * 0.30:
+            continue
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.025 * peri, True)
+        if len(approx) != 4:
+            continue
+
+        x, y, w, h = cv2.boundingRect(approx)
+        rect_ratio = (w * h) / max(img_area, 1.0)
+        aspect = w / max(h, 1)
+        if rect_ratio > best_rect_ratio and 0.5 <= aspect <= 2.2:
+            best_rect_ratio = rect_ratio
+
+    text_ratio = estimate_text_block_ratio(image_bgr)
+    return best_rect_ratio >= 0.35 and text_ratio >= 0.05
+
+def detect_large_centered_rect(image_bgr):
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    img_h, img_w = gray.shape[:2]
+    img_area = float(img_h * img_w)
+    img_center_x = img_w / 2.0
+    img_center_y = img_h / 2.0
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 50, 150)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < img_area * 0.20:
+            continue
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.03 * peri, True)
+        if len(approx) != 4:
+            continue
+
+        x, y, w, h = cv2.boundingRect(approx)
+        rect_ratio = (w * h) / max(img_area, 1.0)
+        if rect_ratio < 0.26:
+            continue
+
+        cx = x + (w / 2.0)
+        cy = y + (h / 2.0)
+        if abs(cx - img_center_x) <= img_w * 0.18 and abs(cy - img_center_y) <= img_h * 0.18:
+            aspect = w / max(h, 1)
+            if 0.5 <= aspect <= 2.1:
+                return True
+    return False
+
+def detect_portrait_like_image(image_bgr, faces):
+    if faces is None or len(faces) == 0:
+        return False
+
+    img_h, img_w = image_bgr.shape[:2]
+    img_area = float(img_h * img_w)
+    largest_face_area = max((w * h) for (_, _, w, h) in faces)
+    face_ratio = largest_face_area / max(img_area, 1.0)
+    return face_ratio >= 0.08
+
+def road_scene_score(image_bgr):
+    hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+    lower_half = hsv[hsv.shape[0] // 2 :, :]
+    if lower_half.size == 0:
+        return 0.0
+
+    saturation = lower_half[:, :, 1]
+    value = lower_half[:, :, 2]
+    grayish_ratio = float(np.mean(saturation < 65))
+    visible_ratio = float(np.mean(value > 45))
+
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    lower_gray = gray[gray.shape[0] // 2 :, :]
+    edges = cv2.Canny(lower_gray, 70, 180)
+    edge_ratio = float(np.mean(edges > 0))
+
+    return grayish_ratio * 0.45 + visible_ratio * 0.25 + min(edge_ratio / 0.18, 1.0) * 0.30
+
+def outdoor_scene_score(image_bgr):
+    hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+    h = hsv[:, :, 0]
+    s = hsv[:, :, 1]
+    v = hsv[:, :, 2]
+
+    blue_sky_ratio = float(np.mean(((h >= 90) & (h <= 130) & (s >= 35) & (v >= 70))))
+    green_ratio = float(np.mean(((h >= 35) & (h <= 95) & (s >= 35) & (v >= 45))))
+    bright_ratio = float(np.mean(v >= 85))
+    return blue_sky_ratio * 0.35 + green_ratio * 0.25 + bright_ratio * 0.40
+
+def water_scene_score(image_bgr):
+    hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+    lower_half = hsv[hsv.shape[0] // 2 :, :]
+    if lower_half.size == 0:
+        return 0.0
+
+    h = lower_half[:, :, 0]
+    s = lower_half[:, :, 1]
+    v = lower_half[:, :, 2]
+    reflective_ratio = float(np.mean((s < 70) & (v > 80)))
+    muddy_ratio = float(np.mean(((h >= 8) & (h <= 28) & (s >= 35) & (v >= 35))))
+    dark_pool_ratio = float(np.mean((v >= 35) & (v <= 120) & (s < 90)))
+    return reflective_ratio * 0.45 + muddy_ratio * 0.30 + dark_pool_ratio * 0.25
+
+def damaged_road_visual_score(image_bgr):
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    lower_gray = gray[gray.shape[0] // 2 :, :]
+    if lower_gray.size == 0:
+        return 0.0
+
+    hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+    lower_hsv = hsv[hsv.shape[0] // 2 :, :]
+    saturation = lower_hsv[:, :, 1]
+    value = lower_hsv[:, :, 2]
+
+    edges = cv2.Canny(lower_gray, 45, 150)
+    edge_ratio = float(np.mean(edges > 0))
+
+    # Dark, low-saturation regions often correlate with cracks, potholes,
+    # and broken asphalt patches on road-surface photos.
+    damage_ratio = float(np.mean((value < 125) & (saturation < 110)))
+    texture_strength = min(float(np.std(lower_gray)) / 52.0, 1.0)
+
+    return (
+        min(edge_ratio / 0.12, 1.0) * 0.42
+        + min(damage_ratio / 0.38, 1.0) * 0.38
+        + texture_strength * 0.20
+    )
+
+def verify_alert_content(image_bgr, tag):
+    processed = preprocess_for_detection(image_bgr)
+    lighting, brightness = detect_lighting(processed)
+    tag_lower = tag.lower()
+
+    if brightness < 10:
+        return False, "Image is too dark to verify."
+
+    try:
+        vehicle_count, _, people_count, _, _ = detect_scene_yolo(processed, brightness, allow_fast_empty=False)
+    except Exception:
+        vehicle_count, _ = detect_vehicles_dnn(processed)
+        people_count, _ = detect_crowd_opencv(processed)
+
+    faces = detect_faces_haar(processed)
+    text_ratio = estimate_text_block_ratio(processed)
+    centered_rect = detect_large_centered_rect(processed)
+    document_like = detect_document_like_image(processed)
+    screen_like = detect_screen_like_capture(processed)
+    road_score = road_scene_score(processed)
+    outdoor_score = outdoor_scene_score(processed)
+    water_score = water_scene_score(processed)
+    road_damage_score = damaged_road_visual_score(processed)
+    strong_damaged_road_candidate = (
+        "damaged road" in tag_lower
+        and road_score >= 0.44
+        and outdoor_score >= 0.02
+        and road_damage_score >= 0.38
+    )
+
+    if document_like:
+        return False, "This looks like a document or ID card. Please upload a real road, traffic, crowd, or hazard photo."
+    if screen_like and not strong_damaged_road_candidate:
+        return False, "This looks like a screenshot or screen photo. Please upload a real outdoor alert photo."
+    if centered_rect and text_ratio >= 0.035 and not strong_damaged_road_candidate:
+        return False, "This looks like a close-up card or document photo, not a community alert."
+    if detect_portrait_like_image(processed, faces) and vehicle_count == 0 and people_count < 3:
+        return False, "This looks like a portrait or passport-style photo, not a community alert."
+
+    has_scene_evidence = vehicle_count > 0 or people_count > 0 or road_score >= 0.42 or outdoor_score >= 0.18
+    if not has_scene_evidence:
+        return False, "This image does not look like a real outdoor road, traffic, crowd, or hazard scene."
+
+    traffic_match = vehicle_count >= 2 and outdoor_score >= 0.08 and text_ratio < 0.05 and not centered_rect
+    crowd_match = people_count >= 3 and outdoor_score >= 0.08 and text_ratio < 0.05 and not centered_rect
+    damaged_road_match = (
+        road_score >= 0.42
+        and outdoor_score >= 0.02
+        and water_score < 0.48
+        and text_ratio < 0.09
+        and (not centered_rect or strong_damaged_road_candidate)
+        and vehicle_count <= 2
+        and people_count <= 2
+        and (
+            road_damage_score >= 0.36
+            or (road_score >= 0.54 and outdoor_score >= 0.06)
+        )
+    )
+    water_logging_match = (
+        road_score >= 0.44
+        and outdoor_score >= 0.12
+        and water_score >= 0.34
+        and text_ratio < 0.045
+        and not centered_rect
+        and people_count <= 2
+    )
+    other_match = (
+        road_score >= 0.50
+        and outdoor_score >= 0.16
+        and text_ratio < 0.04
+        and not centered_rect
+        and faces is not None
+        and len(faces) == 0
+    )
+
+    if "traffic" in tag_lower and not traffic_match:
+        return False, f"This image does not match High Traffic. Detected vehicles: {vehicle_count}. Please upload a busier road scene."
+    elif "crowd" in tag_lower and not crowd_match:
+        return False, f"This image does not match Crowd. Detected people: {people_count}. Please upload a clearer crowd scene."
+    elif "damaged road" in tag_lower and not damaged_road_match:
+        if document_like or (centered_rect and text_ratio >= 0.06) or (screen_like and text_ratio >= 0.12):
+            return False, "ID card or document detected. Please upload a real road photo."
+        return False, "Damaged road not detected clearly. Please upload a clearer road photo."
+    elif "water logging" in tag_lower and not water_logging_match:
+        return False, "This image does not look like water logging on a road. Please upload a clearer outdoor water-logging photo."
+    elif "other" in tag_lower and not other_match:
+        return False, "This image does not match a valid road or hazard alert for this app."
+
+    return True, "Verified"
+
+def save_uploaded_community_image(image_data_url):
+    # Upload directly to Cloudinary
+    response = cloudinary.uploader.upload(image_data_url, folder="safety_app_alerts")
+    return response.get("secure_url")
+
+def delete_cloudinary_image(image_url):
+    if not image_url or "cloudinary.com" not in image_url or "/upload/" not in image_url:
+        return
+    try:
+        after_upload = image_url.split("/upload/")[1]
+        if after_upload.startswith("v") and "/" in after_upload:
+            after_upload = after_upload.split("/", 1)[1]
+        public_id = after_upload.rsplit(".", 1)[0]
+        cloudinary.uploader.destroy(public_id)
+    except Exception as e:
+        print(f"Failed to delete from Cloudinary: {e}")
+
+def cleanup_old_alerts():
+    """Deletes posts and images older than 7 days to keep the feed relevant."""
+    if not db:
+        return
+    try:
+        seven_days_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+        # Query posts older than 7 days
+        old_posts = db.collection('community_posts').where('created_at', '<', seven_days_ago).stream()
+        
+        for doc in old_posts:
+            data = doc.to_dict()
+            image_url = data.get("image_url", "")
+            
+            # Delete physical image from Cloudinary
+            delete_cloudinary_image(image_url)
+            
+            # Delete record from Firebase Firestore
+            doc.reference.delete()
+    except Exception as e:
+        print(f"Cleanup error: {e}")
 
 def haversine_km(lat1, lon1, lat2, lon2):
     r = 6371.0
@@ -501,35 +779,29 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * r * math.asin(math.sqrt(a))
 
 def fetch_posts_with_reactions():
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT
-                p.id, p.image_url, p.lat, p.lon, p.tag, p.note, p.created_at,
-                SUM(CASE WHEN r.reaction_type='Avoid' THEN 1 ELSE 0 END) AS avoid_count,
-                SUM(CASE WHEN r.reaction_type='Careful' THEN 1 ELSE 0 END) AS careful_count,
-                SUM(CASE WHEN r.reaction_type='Safe now' THEN 1 ELSE 0 END) AS safe_now_count
-            FROM posts p
-            LEFT JOIN reactions r ON r.post_id = p.id
-            GROUP BY p.id
-            ORDER BY p.id DESC
-            """
-        ).fetchall()
-
+    if not db:
+        return []
+    docs = db.collection('community_posts').order_by('created_at', direction=firestore.Query.DESCENDING).limit(50).stream()
     posts = []
-    for row in rows:
+    for doc in docs:
+        data = doc.to_dict()
+        reactions_data = data.get('reactions', {})
+        avoid_count = sum(1 for r in reactions_data.values() if r == 'Avoid')
+        careful_count = sum(1 for r in reactions_data.values() if r == 'Careful')
+        safe_now_count = sum(1 for r in reactions_data.values() if r == 'Safe now')
+        
         posts.append({
-            "id": row["id"],
-            "image_url": row["image_url"],
-            "lat": row["lat"],
-            "lon": row["lon"],
-            "tag": row["tag"],
-            "note": row["note"] or "",
-            "created_at": row["created_at"],
+            "id": doc.id,
+            "image_url": data.get("image_url"),
+            "lat": float(data.get("lat", 0)),
+            "lon": float(data.get("lon", 0)),
+            "tag": data.get("tag"),
+            "note": data.get("note", ""),
+            "created_at": data.get("created_at"),
             "reactions": {
-                "Avoid": int(row["avoid_count"] or 0),
-                "Careful": int(row["careful_count"] or 0),
-                "Safe now": int(row["safe_now_count"] or 0)
+                "Avoid": avoid_count,
+                "Careful": careful_count,
+                "Safe now": safe_now_count
             }
         })
     return posts
@@ -650,14 +922,43 @@ def icon_192_file():
 def icon_512_file():
     return send_from_directory(BASE_DIR, "icon-512.png")
 
-@app.route("/uploads/<path:filename>", methods=["GET"])
-def uploaded_file(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+@app.route("/subscribe", methods=["POST"])
+def subscribe():
+    data = request.json or {}
+    token = data.get("token")
+    user_token = data.get("user_token")
+    if token and user_token and db:
+        db.collection("fcm_tokens").document(user_token).set({"token": token}, merge=True)
+    return jsonify({"ok": True})
 
-@app.route("/community-posts", methods=["GET", "POST"])
+def trigger_push_notifications(title, body):
+    if not db: return
+    try:
+        tokens_query = db.collection("fcm_tokens").stream()
+        tokens = [doc.to_dict().get("token") for doc in tokens_query if doc.to_dict().get("token")]
+        if not tokens: return
+        
+        message = messaging.MulticastMessage(notification=messaging.Notification(title=title, body=body), tokens=tokens[:500])
+        messaging.send_multicast(message)
+    except Exception as e:
+        print(f"FCM Push error: {e}")
+
+@app.route("/community-posts", methods=["GET", "POST", "DELETE"])
 def community_posts():
+    # Auto-cleanup old data whenever the feed is accessed or updated
+    cleanup_old_alerts()
+
     if request.method == "GET":
         return jsonify({"posts": fetch_posts_with_reactions()})
+
+    if request.method == "DELETE":
+        if db:
+            for doc in db.collection('community_posts').stream():
+                data = doc.to_dict()
+                image_url = data.get("image_url", "")
+                delete_cloudinary_image(image_url)
+                doc.reference.delete()
+        return jsonify({"ok": True, "message": "All community posts deleted successfully."})
 
     data = request.json or {}
     image = data.get("image")
@@ -670,23 +971,35 @@ def community_posts():
         return jsonify({"ok": False, "message": "image, lat, lon required"}), 400
 
     try:
+        # Verify alert content using AI before saving
+        image_bgr = decode_data_url_image(image)
+        is_real, reason = verify_alert_content(image_bgr, tag)
+        if not is_real:
+            return jsonify({"ok": False, "message": f"Rejected by AI: {reason}"}), 400
+
         image_url = save_uploaded_community_image(image)
         created_at = datetime.utcnow().isoformat()
-        with get_db_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO posts (image_url, lat, lon, tag, note, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (image_url, float(lat), float(lon), tag, note, created_at)
-            )
-            conn.commit()
+        if db:
+            db.collection('community_posts').add({
+                'image_url': image_url,
+                'lat': float(lat),
+                'lon': float(lon),
+                'tag': tag,
+                'note': note,
+                'created_at': created_at,
+                'reactions': {},
+                'helpful_feedback': {}
+            })
+            
+            # Trigger push notification in background
+            threading.Thread(target=trigger_push_notifications, args=(f"Community Alert: {tag}", note if note else "A safety alert was posted near your location.")).start()
+
     except Exception as exc:
         return jsonify({"ok": False, "message": f"Upload processing failed: {str(exc)}"}), 500
 
     return jsonify({"ok": True, "message": "Community post uploaded."})
 
-@app.route("/community-posts/<int:post_id>/react", methods=["POST"])
+@app.route("/community-posts/<post_id>/react", methods=["POST"])
 def react_to_post(post_id):
     data = request.json or {}
     reaction_type = data.get("reaction_type")
@@ -696,25 +1009,25 @@ def react_to_post(post_id):
     if reaction_type not in valid_reactions or not user_token:
         return jsonify({"ok": False, "message": "reaction_type and user_token required"}), 400
 
-    created_at = datetime.utcnow().isoformat()
-    with get_db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO reactions (post_id, user_token, reaction_type, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(post_id, user_token) DO UPDATE SET
-                reaction_type=excluded.reaction_type,
-                created_at=excluded.created_at
-            """,
-            (post_id, user_token, reaction_type, created_at)
-        )
-        conn.commit()
+    if db:
+        db.collection('community_posts').document(post_id).set({
+            'reactions': { user_token: reaction_type }
+        }, merge=True)
 
     return jsonify({"ok": True, "message": "Reaction updated."})
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ New feedback endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+@app.route("/community-posts/<post_id>", methods=["DELETE"])
+def delete_community_post(post_id):
+    if db:
+        doc_ref = db.collection('community_posts').document(post_id)
+        doc = doc_ref.get()
+        if doc.exists:
+            data = doc.to_dict()
+            delete_cloudinary_image(data.get("image_url", ""))
+            doc_ref.delete()
+    return jsonify({"ok": True, "message": "Post deleted successfully."})
 
-@app.route("/community-posts/<int:post_id>/helpful", methods=["POST"])
+@app.route("/community-posts/<post_id>/helpful", methods=["POST"])
 def mark_helpful(post_id):
     data = request.json or {}
     helpful = data.get("helpful")
@@ -723,15 +1036,10 @@ def mark_helpful(post_id):
     if helpful is None or not user_token:
         return jsonify({"ok": False, "message": "helpful (bool) and user_token required"}), 400
 
-    with get_db_connection() as conn:
-        conn.execute("""
-            INSERT INTO helpful_feedback (post_id, user_token, helpful, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(post_id, user_token) DO UPDATE SET
-                helpful = excluded.helpful,
-                created_at = excluded.created_at
-        """, (post_id, user_token, 1 if helpful else 0, datetime.utcnow().isoformat()))
-        conn.commit()
+    if db:
+        db.collection('community_posts').document(post_id).set({
+            'helpful_feedback': { user_token: True if helpful else False }
+        }, merge=True)
 
     return jsonify({"ok": True})
 
@@ -745,14 +1053,103 @@ def submit_app_feedback():
     if not isinstance(rating, int) or rating < 1 or rating > 5 or not user_token:
         return jsonify({"ok": False, "message": "rating (1-5) and user_token required"}), 400
 
-    with get_db_connection() as conn:
-        conn.execute("""
-            INSERT INTO app_feedback (user_token, rating, comment, created_at)
-            VALUES (?, ?, ?, ?)
-        """, (user_token, rating, comment, datetime.utcnow().isoformat()))
-        conn.commit()
+    if db:
+        db.collection('app_feedback').add({
+            'user_token': user_token,
+            'rating': rating,
+            'comment': comment,
+            'created_at': datetime.utcnow().isoformat()
+        })
 
     return jsonify({"ok": True, "message": "Feedback received. Thank you!"})
+
+def check_admin_auth(username, password):
+    admin_user = os.getenv("ADMIN_USERNAME")
+    admin_pass = os.getenv("ADMIN_PASSWORD")
+    # If credentials are not set in the environment, deny all access to be safe.
+    if not admin_user or not admin_pass:
+        return False
+    return username == admin_user and password == admin_pass
+
+def request_admin_auth():
+    return Response(
+        'Admin Access Required', 401,
+        {'WWW-Authenticate': 'Basic realm="Admin Login"'}
+    )
+
+def requires_admin_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_admin_auth(auth.username, auth.password):
+            return request_admin_auth()
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route("/admin", methods=["GET"])
+@requires_admin_auth
+def admin_dashboard():
+    feedbacks = []
+    user_count = 0
+    avg_rating = 0
+    
+    if db:
+        try:
+            f_docs = db.collection('app_feedback').order_by('created_at', direction=firestore.Query.DESCENDING).limit(100).stream()
+            total_stars = 0
+            for doc in f_docs:
+                data = doc.to_dict()
+                data['id'] = doc.id
+                feedbacks.append(data)
+                total_stars += data.get('rating', 0)
+            if feedbacks:
+                avg_rating = round(total_stars / len(feedbacks), 1)
+
+            user_count = sum(1 for _ in db.collection('fcm_tokens').stream())
+        except Exception as e:
+            print(f"Admin fetch error: {e}")
+
+    posts = fetch_posts_with_reactions()
+    yolo_status = YOLO is not None
+    tomtom_status = bool(os.getenv("TOMTOM_API_KEY"))
+
+    return render_template("admin.html", feedbacks=feedbacks, posts=posts, user_count=user_count, 
+                           avg_rating=avg_rating, yolo_status=yolo_status, tomtom_status=tomtom_status)
+
+@app.route("/admin/broadcast", methods=["POST"])
+@requires_admin_auth
+def admin_broadcast():
+    data = request.json or {}
+    title = data.get("title", "Safety Alert")
+    body = data.get("message", "")
+    if not body or not db:
+        return jsonify({"ok": False, "message": "Message body is required."})
+    
+    try:
+        tokens_query = db.collection("fcm_tokens").stream()
+        tokens = [doc.to_dict().get("token") for doc in tokens_query if doc.to_dict().get("token")]
+        if not tokens:
+            return jsonify({"ok": False, "message": "No subscribed users found."})
+        
+        success_count = 0
+        for i in range(0, len(tokens), 500):
+            chunk = tokens[i:i+500]
+            message = messaging.MulticastMessage(notification=messaging.Notification(title=title, body=body), tokens=chunk)
+            response = messaging.send_multicast(message)
+            success_count += response.success_count
+            
+        return jsonify({"ok": True, "message": f"Broadcast successfully sent to {success_count} active devices!"})
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"Broadcast failed: {str(e)}"})
+
+@app.route("/admin/cleanup", methods=["POST"])
+@requires_admin_auth
+def admin_cleanup():
+    try:
+        cleanup_old_alerts()
+        return jsonify({"ok": True, "message": "Old alerts older than 7 days have been permanently deleted."})
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"Cleanup failed: {str(e)}"})
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -828,8 +1225,6 @@ def analyze_lighting():
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     lighting, brightness = detect_lighting(img)
     return jsonify({"lighting": lighting, "brightness": brightness})
-
-init_storage()
 
 if __name__ == "__main__":
     log_service_status()

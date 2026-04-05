@@ -13,7 +13,6 @@ models/
 
 # Runtime/generated app data
 uploads/
-community.db
 
 # Env/secrets
 .env

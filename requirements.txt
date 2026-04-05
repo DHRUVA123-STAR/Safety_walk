@@ -1,9 +1,11 @@
---extra-index-url https://download.pytorch.org/whl/cpu
+﻿--extra-index-url https://download.pytorch.org/whl/cpu
 
 Flask>=3.0,<4.0
 gunicorn>=21.2,<22.0
 opencv-python-headless>=4.9,<5.0
 numpy>=1.26,<3.0
+cloudinary>=1.38,<2.0
+firebase-admin>=6.4,<7.0
 certifi>=2024.0.0
 ultralytics>=8.3,<9.0
 torch==2.2.2+cpu

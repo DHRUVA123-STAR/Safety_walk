@@ -22,6 +22,10 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
+    <!-- Firebase Setup -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging-compat.js"></script>
+
     <style>
         :root{
             --primary:#1966d2;
@@ -155,6 +159,21 @@
         .theme-btn:hover{
             transform:translateY(-3px);
             box-shadow:0 12px 20px rgba(249,115,22,0.35);
+        }
+
+        .check-btn.cancel-btn-style {
+            background: linear-gradient(135deg, #f43f5e, #ef4444);
+        }
+        .check-btn.cancel-btn-style:hover {
+            box-shadow: 0 12px 20px rgba(239, 68, 68, 0.3);
+        }
+
+        .community-toggle-btn {
+            width: auto;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            flex-shrink: 0;
         }
 
         .theme-btn svg{
@@ -516,6 +535,81 @@
             overflow:auto;
         }
 
+        .desktop-community-overlay{
+            position:fixed;
+            inset:0;
+            background:rgba(15,23,42,0.38);
+            z-index:1090;
+            display:none;
+        }
+
+        #desktopCommunityPanel{
+            display:none;
+            position:fixed;
+            top:24px;
+            right:24px;
+            width:min(420px, calc(100vw - 32px));
+            max-height:calc(100vh - 48px);
+            overflow:hidden;
+            z-index:1100;
+            box-shadow:0 24px 60px rgba(15,23,42,0.24);
+        }
+
+        #desktopCommunityPanel.show{
+            display:flex;
+            flex-direction:column;
+        }
+
+        .desktop-community-head{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+        }
+
+        .desktop-community-actions{
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+
+        .desktop-community-btn{
+            border:none;
+            border-radius:999px;
+            padding:8px 14px;
+            font-size:13px;
+            font-weight:700;
+            cursor:pointer;
+        }
+
+        .desktop-community-btn.primary{
+            background:linear-gradient(135deg,var(--primary),var(--accent));
+            color:#fff;
+        }
+
+        .desktop-community-btn.secondary{
+            background:transparent;
+            color:#475569;
+            border:1px solid #cbd5e1;
+        }
+
+        .desktop-community-btn.danger{
+            background:linear-gradient(135deg,#ef4444,#dc2626);
+            color:#fff;
+        }
+
+        #desktopCommunityPanel .feed-list{
+            margin-top:0;
+            max-height:none;
+            padding-right:4px;
+        }
+
+        .dark-mode .desktop-community-btn.secondary{
+            color:#e2e8f0;
+            border-color:#475569;
+        }
+
         .feed-item{
             border:1px solid rgba(15,23,42,0.12);
             border-radius:12px;
@@ -534,6 +628,29 @@
             max-height:180px;
             object-fit:cover;
             margin-top:8px;
+            cursor:pointer;
+        }
+
+        .alert-image-modal{
+            display:none;
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.82);
+            z-index:1200;
+            align-items:center;
+            justify-content:center;
+            padding:24px;
+        }
+
+        .alert-image-modal img{
+            max-width:min(100%, 1100px);
+            max-height:88vh;
+            width:auto;
+            height:auto;
+            border-radius:14px;
+            box-shadow:0 20px 60px rgba(0,0,0,0.4);
+            object-fit:contain;
+            background:#0f172a;
         }
 
         .reaction-row{
@@ -552,12 +669,6 @@
             cursor:pointer;
         }
 
-        .community-status{
-            margin-top:8px;
-            font-size:13px;
-            color:#0f766e;
-        }
-
         .community-meta{
             font-size:12px;
             color:#64748b;
@@ -567,6 +678,13 @@
         @media (max-width:980px){
             .content-grid{
                 grid-template-columns:1fr;
+            }
+        }
+
+        @media (max-width:768px){
+            #desktopCommunityPanel,
+            .desktop-community-overlay{
+                display:none !important;
             }
         }
 
@@ -720,7 +838,7 @@
         }
 
         .mobile-chatbar,
-        .mobile-quick-sheet,
+        .mobile-quick-menu,
         .mobile-lang-sheet,
         .mobile-center-score,
         #fullscreenCamControls,
@@ -728,6 +846,7 @@
         .mobile-stage,
         .mobile-menu-sheet,
         .mobile-menu-overlay,
+        .mobile-community-sheet,
         .mobile-community-card,
         #mobileFullscreenVideo,
         .mobile-cam-subtitle,
@@ -951,14 +1070,13 @@
                 text-overflow: ellipsis;
             }
 
-            .mobile-quick-sheet,
             .mobile-lang-sheet,
             .mobile-menu-sheet {
                 position: fixed;
                 left: 12px;
                 right: 12px;
                 bottom: 78px;
-                z-index: 1120;
+                z-index: 1160;
                 background: rgba(12, 18, 31, 0.96);
                 border: 1px solid rgba(255, 255, 255, 0.18);
                 border-radius: 18px;
@@ -966,7 +1084,6 @@
                 box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
             }
 
-            .mobile-quick-sheet.show,
             .mobile-lang-sheet.show,
             .mobile-menu-sheet.show,
             .mobile-center-score.show {
@@ -1147,6 +1264,89 @@
                 font-weight: 600;
             }
 
+            /* --- MOBILE PLUS MENU DRAWER --- */
+            .mobile-quick-menu {
+                position: fixed;
+                left: 12px;
+                right: 12px;
+                bottom: 78px;
+                z-index: 1160;
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 12px;
+                padding: 18px 16px 16px;
+                background: rgba(12, 15, 22, 0.96);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 26px 26px 18px 18px;
+                box-shadow: 0 24px 54px rgba(0,0,0,0.42);
+                transform: translateY(32px) scale(0.96);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+                transform-origin: bottom center;
+                backdrop-filter: blur(14px);
+            }
+
+            .mobile-quick-menu.show {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .mobile-quick-menu::before {
+                content: "";
+                grid-column: 1 / -1;
+                justify-self: center;
+                width: 42px;
+                height: 4px;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.18);
+                margin-bottom: 2px;
+            }
+
+            .quick-menu-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 118px;
+                gap: 10px;
+                background: rgba(255,255,255,0.06);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 20px;
+                color: #f8fafc;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 14px 10px;
+            }
+
+            .quick-menu-icon {
+                width: 54px;
+                height: 54px;
+                border-radius: 999px;
+                color: white;
+                font-size: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .quick-menu-item:nth-child(1) .quick-menu-icon { background: linear-gradient(135deg, #fb7185, #f97316); box-shadow: 0 10px 20px rgba(249, 115, 22, 0.25); }
+            .quick-menu-item:nth-child(2) .quick-menu-icon { background: linear-gradient(135deg, #3b82f6, #06b6d4); box-shadow: 0 10px 20px rgba(59, 130, 246, 0.25); }
+            .quick-menu-item:nth-child(3) .quick-menu-icon { background: linear-gradient(135deg, #22c55e, #10b981); box-shadow: 0 10px 20px rgba(16, 185, 129, 0.25); }
+
+            .quick-menu-label {
+                font-size: 12px;
+                font-weight: 700;
+                color: #f8fafc;
+            }
+
+            .quick-menu-subtext {
+                font-size: 10px;
+                line-height: 1.3;
+                color: rgba(226,232,240,0.78);
+                text-align: center;
+            }
+
             .mobile-sheet-btn:last-child {
                 margin-bottom: 0;
             }
@@ -1259,7 +1459,7 @@
 
             body.camera-fullscreen-mode #analyzeBtn,
             body.camera-fullscreen-mode .mobile-chatbar,
-            body.camera-fullscreen-mode .mobile-quick-sheet,
+            body.camera-fullscreen-mode .mobile-quick-menu,
             body.camera-fullscreen-mode .mobile-lang-sheet,
             body.camera-fullscreen-mode .mobile-menu-sheet {
                 display: none !important;
@@ -1343,6 +1543,16 @@
 
             .dark-mode .mobile-icon-btn svg { stroke: #fff; }
 
+            .dark-mode .mobile-quick-menu {
+                background: rgba(6, 10, 18, 0.97);
+                border-color: rgba(255,255,255,0.12);
+            }
+            .dark-mode .quick-menu-item {
+                color: #f8fafc;
+                background: rgba(255,255,255,0.05);
+                border-color: rgba(255,255,255,0.08);
+            }
+
             .mobile-capture-preview {
                 display: none;
             }
@@ -1383,27 +1593,61 @@
                 background: rgba(255,255,255,0.08);
                 font-weight: 700;
             }
+
+            .mobile-community-sheet {
+                position: fixed;
+                top: 0;
+                bottom: 0;
+                right: 0;
+                width: min(84vw, 340px);
+                background: rgba(12, 18, 31, 0.96);
+                border-left: 1px solid rgba(255, 255, 255, 0.18);
+                border-radius: 16px 0 0 16px;
+                z-index: 1160;
+                padding: 12px;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+                display: flex;
+                flex-direction: column;
+                box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            }
+            .mobile-community-sheet.show {
+                transform: translateX(0);
+            }
+            .mobile-community-sheet .mobile-menu-head {
+                flex: 0 0 auto;
+            }
+            .mobile-community-sheet .mobile-feed-list {
+                flex: 1 1 auto;
+                overflow-y: auto;
+                max-height: none;
+            }
         }
 
-        #feedbackModal .feedback-modal-content {
+        #feedbackModal .feedback-modal-content,
+        #desktopAlertModal .feedback-modal-content {
             background: #ffffff;
             color: #0f172a;
         }
 
-        .dark-mode #feedbackModal .feedback-modal-content {
+        .dark-mode #feedbackModal .feedback-modal-content,
+        .dark-mode #desktopAlertModal .feedback-modal-content {
             background: #0f172a;
             color: #e2e8f0;
             border: 1px solid rgba(255,255,255,0.16);
         }
 
         .dark-mode #feedbackModal select,
-        .dark-mode #feedbackModal textarea {
+        .dark-mode #feedbackModal textarea,
+        .dark-mode #desktopAlertModal select,
+        .dark-mode #desktopAlertModal textarea {
             background: #111827;
             color: #e2e8f0;
             border: 1px solid #334155;
         }
 
-        .dark-mode #feedbackCancelBtn {
+        .dark-mode #feedbackCancelBtn,
+        .dark-mode #alertCancelBtn {
             color: #e2e8f0 !important;
             border-color: #64748b !important;
             background: transparent !important;
@@ -1414,6 +1658,10 @@
 <body>
 
 <div class="container">
+
+    <!-- Hidden native inputs for mobile file selection -->
+    <input type="file" id="communityImageInput" accept="image/*" style="display:none;" onchange="handleCommunityImageSelect(this)">
+    <input type="file" id="communityNativeCamera" accept="image/*" capture="environment" style="display:none;" onchange="handleCommunityImageSelect(this)">
 
     <div class="mobile-topbar">
         <button class="mobile-top-btn" type="button" aria-label="Menu" onclick="toggleMobileMenu()">
@@ -1462,6 +1710,14 @@
                 <svg viewBox="0 0 24 24">
                     <path d="M4 7h4l2-2h4l2 2h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>
                     <circle cx="12" cy="13" r="3.5"/>
+                </svg>
+            </button>
+
+            <!-- Community Alerts -->
+            <button class="icon-btn" title="Community Alerts" onclick="toggleDesktopCommunityPanel()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                 </svg>
             </button>
 
@@ -1583,13 +1839,45 @@
 
 </div>
 
+<div class="desktop-community-overlay" id="desktopCommunityOverlay" onclick="closeDesktopCommunityPanel()"></div>
+<div class="panel" id="desktopCommunityPanel">
+    <div class="desktop-community-head">
+        <strong>Community Alerts</strong>
+        <div class="desktop-community-actions">
+            <button type="button" class="desktop-community-btn primary" onclick="toggleDesktopAlertForm()">Post Alert</button>
+            <button type="button" class="desktop-community-btn danger" onclick="deleteAllCommunityPosts()">Delete All</button>
+            <button type="button" class="desktop-community-btn secondary" onclick="closeDesktopCommunityPanel()">Close</button>
+        </div>
+    </div>
+    <div class="feed-list" id="communityFeed"></div>
+</div>
+
+<div id="alertImageModal" class="alert-image-modal" onclick="if(event.target === this) closeAlertImageModal()">
+    <img id="alertImageModalImg" alt="Full community alert image">
+</div>
+
 <div class="mobile-center-score" id="mobileCenterScore">
     <h4 id="mobileScoreLevel">Safety Level</h4>
     <p class="score" id="mobileScoreValue">Score: 0</p>
 </div>
 
-<div class="mobile-quick-sheet" id="mobileQuickSheet">
-    <button class="mobile-sheet-btn" type="button" onclick="openAnalyzeCameraFullscreen()">Open Camera</button>
+<!-- MOBILE PLUS DRAWER -->
+<div class="mobile-quick-menu" id="mobileQuickMenu">
+    <button class="quick-menu-item" type="button" onclick="quickOpenNativeCamera()">
+        <div class="quick-menu-icon">📸</div>
+        <span class="quick-menu-label">Camera</span>
+        <span class="quick-menu-subtext">Capture a live road alert</span>
+    </button>
+    <button class="quick-menu-item" type="button" onclick="quickOpenGallery()">
+        <div class="quick-menu-icon">🖼️</div>
+        <span class="quick-menu-label">Photos</span>
+        <span class="quick-menu-subtext">Choose from your gallery</span>
+    </button>
+    <button class="quick-menu-item" type="button" onclick="quickOpenAlerts()">
+        <div class="quick-menu-icon">📢</div>
+        <span class="quick-menu-label">Alerts</span>
+        <span class="quick-menu-subtext">Open community updates</span>
+    </button>
 </div>
 
 <div class="mobile-lang-sheet" id="mobileLangSheet">
@@ -1601,7 +1889,7 @@
     </div>
 </div>
 
-<div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="closeMobileMenu()"></div>
+<div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="closeMobileSheets()"></div>
 <aside class="mobile-menu-sheet" id="mobileMenuSheet">
     <div class="mobile-menu-head">
         <strong>History</strong>
@@ -1611,6 +1899,35 @@
         </div>
     </div>
     <div id="mobileHistoryList" class="mobile-history-list">No history yet.</div>
+</aside>
+
+<aside class="mobile-community-sheet" id="mobileCommunitySheet">
+    <div class="mobile-menu-head">
+        <strong>Community Alerts</strong>
+        <div style="display:flex; gap:8px;">
+            <button type="button" class="mobile-menu-close" onclick="deleteAllCommunityPosts()" title="Delete all alerts">🗑</button>
+            <button type="button" class="mobile-menu-close" onclick="toggleCommunitySheet()">×</button>
+        </div>
+    </div>
+    
+    <div id="mobileAlertForm" style="display:none; background: rgba(255,255,255,0.08); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 12px;">
+        <img id="mobileAlertPreview" style="width: 100%; border-radius: 8px; margin-bottom: 8px; max-height: 180px; object-fit: cover;">
+        <select id="mobileCommunityTag" class="mobile-community-select">
+            <option value="Traffic">High Traffic</option>
+            <option value="Damaged Road">Damaged Road</option>
+            <option value="Water Logging">Water Logging</option>
+            <option value="Crowd">Dense Crowd</option>
+            <option value="Other">Other</option>
+        </select>
+        <textarea id="mobileCommunityNote" class="mobile-community-note" placeholder="Add details..."></textarea>
+        <div style="display:flex; gap:8px;">
+            <button class="mobile-sheet-btn" style="flex:1; background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #fff; text-align:center; margin-top:8px;" type="button" onclick="cancelCommunityPost()">Cancel</button>
+            <button class="mobile-sheet-btn" style="flex:1; background: linear-gradient(135deg, #2575fc 0%, #1fc3d6 100%); text-align:center; margin-top:8px; border:none;" onclick="submitCommunityPost()">Post Alert</button>
+        </div>
+        <div id="mobileCommunityStatus" class="mobile-community-status"></div>
+    </div>
+
+    <div id="mobileCommunityFeed" class="mobile-feed-list"></div>
 </aside>
 
 <div class="mobile-chatbar" id="mobileChatBar">
@@ -1659,7 +1976,7 @@
 </div>
 
 <!-- Feedback Modal -->
-<div id="feedbackModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+<div id="feedbackModal" onclick="if(event.target === this) closeFeedbackModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
     <div class="feedback-modal-content" style="padding:24px; border-radius:16px; width:90%; max-width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
         <h3 style="margin:0 0 16px;">Your Feedback Matters</h3>
         
@@ -1682,6 +1999,38 @@
     </div>
 </div>
 
+<!-- Desktop Alert Modal -->
+<div id="desktopAlertModal" onclick="if(event.target === this) closeDesktopAlertModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="feedback-modal-content" style="padding:24px; border-radius:16px; width:90%; max-width:450px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 16px;">Post Community Alert</h3>
+        
+        <div class="community-grid">
+            <button type="button" class="community-upload-btn" onclick="document.getElementById('communityImageInput').click()">
+                Click to Upload Alert Photo
+            </button>
+            <div id="desktopSelectedImageInfo" style="font-size:13px; color:#0f766e; margin-bottom:8px;"></div>
+            
+            <label style="display:block; margin-bottom:8px; font-weight:500;">Category</label>
+            <select id="communityTag" class="community-file" style="margin-bottom: 16px; width:100%; padding:10px; border-radius:8px;">
+                <option value="Traffic">High Traffic</option>
+                <option value="Damaged Road">Damaged Road</option>
+                <option value="Water Logging">Water Logging</option>
+                <option value="Crowd">Dense Crowd</option>
+                <option value="Other">Other</option>
+            </select>
+            
+            <label style="display:block; margin-bottom:8px; font-weight:500;">Note</label>
+            <textarea id="communityNote" class="community-note" placeholder="Add a note... (e.g., 'Pothole near the corner')" style="width:100%; height:80px; padding:10px; border-radius:8px; resize:vertical; margin-bottom:16px;"></textarea>
+            
+            <div style="display:flex; gap:12px; justify-content:flex-end;">
+                <button id="alertCancelBtn" onclick="closeDesktopAlertModal()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:transparent; color:#0f172a; cursor:pointer;">Cancel</button>
+                <button onclick="submitCommunityPost()" style="padding:10px 20px; border:none; border-radius:8px; background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; font-weight:600; cursor:pointer;">Post Alert</button>
+            </div>
+            <div id="communityStatus" class="community-status" style="margin-top:8px;"></div>
+        </div>
+    </div>
+</div>
+
 <script>
 let map;
 let videoStream=null;
@@ -1693,7 +2042,22 @@ let activeVideoInputIndex=-1;
 let mobileFacingMode="environment";
 let mobileCameraMode="analyze";
 let mobileCapturedImageData=null;
+let selectedAlertFile=null; // Stores the file chosen from native camera/gallery
 const userToken = 'guest-' + Math.random().toString(36).substr(2, 9);
+
+// Initialize Firebase for Web Push
+firebase.initializeApp({
+  apiKey: "AIzaSyDeMBEciQRuCJJN05AJj9mpCOR-5VFu3Is",
+  authDomain: "safety-walk-app.firebaseapp.com",
+  projectId: "safety-walk-app",
+  storageBucket: "safety-walk-app.firebasestorage.app",
+  messagingSenderId: "200548711797",
+  appId: "1:200548711797:web:36785a05250e4d9929e73c"
+});
+const messaging = firebase.messaging();
+messaging.onMessage((payload) => {
+  setCommunityStatus(`New Nearby Alert: ${payload.notification.title}`, false);
+});
 
 /* ==================== LANGUAGE SWITCH (NEW FEATURE) ==================== */
 const CURRENT_LANG_KEY = "voice_current_lang";
@@ -1747,7 +2111,7 @@ const VOICE_RULES={
             "i road ela undi",
             "\u0c08 \u0c30\u0c4b\u0c21\u0c4d \u0c0e\u0c32\u0c3e \u0c09\u0c02\u0c26\u0c3f"
         ],
-        response:(level,score)=>`Ee road ${level} ga undi. Mee safety score ${score}.`
+            response:(level,score)=>`ఈ road ${level} గా ఉంది. మీ safety score ${score}.`
     },
     hi:{
         recognitionLang:"hi-IN",
@@ -1756,7 +2120,7 @@ const VOICE_RULES={
             "yah road kaisa hai",
             "\u092f\u0939 \u0930\u094b\u0921 \u0915\u0948\u0938\u093e \u0939\u0948"
         ],
-        response:(level,score)=>`Yeh road ${level} hai. Aapka safety score ${score} hai.`
+            response:(level,score)=>`यह road ${level} है। आपका safety score ${score} है।`
     }
 };
 
@@ -1979,16 +2343,16 @@ function getVoiceLine(key){
             sync_step:"Merging traffic and safety score now."
         },
         te:{
-            analyzing:"Ippudu scene ni analyze chesthunnanu.",
-            vehicle_step:"Ippudu vehicles detect chesthunnanu.",
-            crowd_step:"Ippudu crowd mariyu lighting detect chesthunnanu.",
-            sync_step:"Ippudu traffic mariyu safety score merge chesthunnanu."
+                analyzing:"ఇప్పుడు scene ని analyze చేస్తున్నాను.",
+                vehicle_step:"ఇప్పుడు vehicles detect చేస్తున్నాను.",
+                crowd_step:"ఇప్పుడు crowd మరియు lighting detect చేస్తున్నాను.",
+                sync_step:"ఇప్పుడు traffic మరియు safety score merge చేస్తున్నాను."
         },
         hi:{
-            analyzing:"Ab scene ka vishleshan kar rahi hoon.",
-            vehicle_step:"Ab vehicles detect kar rahi hoon.",
-            crowd_step:"Ab crowd aur lighting detect kar rahi hoon.",
-            sync_step:"Ab traffic aur safety score merge kar rahi hoon."
+                analyzing:"अब scene का analyze कर रही हूँ।",
+                vehicle_step:"अब vehicles detect कर रही हूँ।",
+                crowd_step:"अब crowd और lighting detect कर रही हूँ।",
+                sync_step:"अब traffic और safety score merge कर रही हूँ।"
         }
     };
     return (lines[currentVoiceLang] && lines[currentVoiceLang][key]) || lines.en[key];
@@ -2199,24 +2563,24 @@ function buildHumanReply(langKey, intent){
             unknown:"I only respond to this app's commands: safety score, traffic, lighting, crowd, area, or help."
         },
         te:{
-            help:"Nenu ee app gurinche respond avutanu: safety score, traffic, lighting, crowd, area updates matrame.",
-            greeting:"Namaskaram. Nenu mee Community Safety assistant. Safety score/traffic/lighting/crowd/area gurinchi adagandi.",
-            thanks:"Santosham. Jagratthaga undandi.",
-            traffic:`Ippudu traffic ${traffic} ga undi.`,
-            lighting:`Ippudu lighting ${lighting} ga undi.`,
-            crowd:`Ippudu crowd ${crowd} ga undi.`,
-            area:`Ippudu area type ${area}.`,
-            unknown:"Nenu ee app commands ki matrame respond avutanu: safety score, traffic, lighting, crowd, area, leda help."
+                help:"నేను ఈ app గురించి మాత్రమే respond అవుతాను: safety score, traffic, lighting, crowd, మరియు area updates.",
+                greeting:"నమస్కారం. నేను మీ Community Safety assistant. Safety score, traffic, lighting, crowd లేదా area గురించి అడగండి.",
+                thanks:"సంతోషం. జాగ్రత్తగా ఉండండి.",
+                traffic:`ఇప్పుడు traffic ${traffic} గా ఉంది.`,
+                lighting:`ఇప్పుడు lighting ${lighting} గా ఉంది.`,
+                crowd:`ఇప్పుడు crowd ${crowd} గా ఉంది.`,
+                area:`ఇప్పుడు area type ${area}.`,
+                unknown:"నేను ఈ app commands కి మాత్రమే respond అవుతాను: safety score, traffic, lighting, crowd, area లేదా help."
         },
         hi:{
-            help:"Main sirf is app ke baare mein bolungi: safety score, traffic, lighting, crowd aur area updates.",
-            greeting:"Namaste. Main aapki Community Safety assistant hoon. Safety score/traffic/lighting/crowd/area ke baare mein puchiye.",
-            thanks:"Theek hai. Surakshit rahiye.",
-            traffic:`Abhi traffic ${traffic} hai.`,
-            lighting:`Abhi lighting ${lighting} hai.`,
-            crowd:`Abhi crowd level ${crowd} hai.`,
-            area:`Abhi area type ${area} hai.`,
-            unknown:"Main sirf is app ke commands ka jawab deti hoon: safety score, traffic, lighting, crowd, area ya help."
+                help:"मैं सिर्फ इस app के बारे में बताउंगी: safety score, traffic, lighting, crowd और area updates.",
+                greeting:"नमस्ते। मैं आपकी Community Safety assistant हूँ। Safety score, traffic, lighting, crowd या area के बारे में पूछिए।",
+                thanks:"ख़ुशी हुई। सुरक्षित रहें।",
+                traffic:`अभी traffic ${traffic} है।`,
+                lighting:`अभी lighting ${lighting} है।`,
+                crowd:`अभी crowd level ${crowd} है।`,
+                area:`अभी area type ${area} है।`,
+                unknown:"मैं सिर्फ इस app के commands का जवाब देती हूँ: safety score, traffic, lighting, crowd, area या help."
         }
     };
 
@@ -2285,7 +2649,7 @@ function speakTextInLanguage(langKey, text){
 function speakSafetySummary(langKey, safetyLevel, score){
     const formatter=VOICE_RULES[langKey] || VOICE_RULES.en;
     const message=formatter.response(safetyLevel,score);
-    const prefix = {en:"Certainly. ", te:"Sare. ", hi:"Bilkul. "}[langKey] || "";
+        const prefix = {en:"Certainly. ", te:"సరే. ", hi:"बिल्कुल। "}[langKey] || "";
     speakTextInLanguage(langKey, `${prefix}${message}`);
 }
 
@@ -2483,7 +2847,7 @@ function fileToDataUrl(file){
     });
 }
 
-function fileToOptimizedDataUrl(file, maxSide=1280, quality=0.82){
+function fileToOptimizedDataUrl(file, maxSide=1280, quality=0.95){
     return new Promise((resolve,reject)=>{
         const reader=new FileReader();
         reader.onload=()=>{
@@ -2529,22 +2893,24 @@ function renderCommunityFeed(posts){
         safePosts.forEach((post)=>{
             const card=document.createElement("div");
             card.className="feed-item";
+            card.setAttribute("data-post-id", post.id);
             card.innerHTML = `
                 <strong>${post.tag}</strong>
                 <div class="community-meta">${timeAgo(post.created_at)} | (${post.lat.toFixed(5)}, ${post.lon.toFixed(5)})</div>
                 <div>${post.note || ""}</div>
-                <img class="feed-img" src="${post.image_url}" alt="community post">
+                <img class="feed-img" src="${post.image_url}" alt="community post" onclick="openAlertImageModal('${post.image_url}')">
         
                 <div class="reaction-row">
-                    <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Avoid')">Avoid (${post.reactions['Avoid']})</button>
-                    <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Careful')">Careful (${post.reactions['Careful']})</button>
-                    <button class="reaction-btn" onclick="reactToPost(${post.id}, 'Safe now')">Safe now (${post.reactions['Safe now']})</button>
+                    <button class="reaction-btn" onclick="reactToPost('${post.id}', 'Avoid')">Avoid (${post.reactions['Avoid']})</button>
+                    <button class="reaction-btn" onclick="reactToPost('${post.id}', 'Careful')">Careful (${post.reactions['Careful']})</button>
+                    <button class="reaction-btn" onclick="reactToPost('${post.id}', 'Safe now')">Safe now (${post.reactions['Safe now']})</button>
+                    <button class="reaction-btn" style="color: #dc2626; border-color: #fca5a5;" onclick="deleteCommunityPost('${post.id}')">🗑 Delete</button>
                 </div>
 
                 <div class="helpful-row">
                     Was this helpful?
-                    <button class="helpful-btn yes" onclick="sendHelpful(${post.id}, true)">Yes</button>
-                    <button class="helpful-btn no"  onclick="sendHelpful(${post.id}, false)">No</button>
+                    <button class="helpful-btn yes" onclick="sendHelpful('${post.id}', true)">Yes</button>
+                    <button class="helpful-btn no"  onclick="sendHelpful('${post.id}', false)">No</button>
                     <span id="helpful-status-${post.id}"></span>
                 </div>
             `;
@@ -2558,6 +2924,55 @@ function renderCommunityFeed(posts){
 
     renderInto(document.getElementById("communityFeed"));
     renderInto(document.getElementById("mobileCommunityFeed"));
+}
+
+function openAlertImageModal(imageUrl){
+    const modal=document.getElementById("alertImageModal");
+    const img=document.getElementById("alertImageModalImg");
+    if(!modal || !img || !imageUrl) return;
+    img.src=imageUrl;
+    modal.style.display="flex";
+}
+
+function closeAlertImageModal(){
+    const modal=document.getElementById("alertImageModal");
+    const img=document.getElementById("alertImageModalImg");
+    if(img) img.src="";
+    if(modal) modal.style.display="none";
+}
+
+async function deleteCommunityPost(postId){
+    if(!confirm("Are you sure you want to delete this alert?")) return;
+    try {
+        const res = await fetch(`/community-posts/${postId}`, { method: "DELETE", cache: "no-store" });
+        if(res.ok) {
+            setCommunityStatus("Alert deleted successfully.");
+            await loadCommunityPosts();
+            try{
+                await calculateSafety();
+            }catch(_err){}
+        } else {
+            setCommunityStatus("Failed to delete alert.", true);
+        }
+    } catch(err) {
+        setCommunityStatus("Network error while deleting.", true);
+    }
+}
+
+async function deleteAllCommunityPosts(){
+    if(!confirm("Are you sure you want to delete all community alerts?")) return;
+    try{
+        const res=await fetch("/community-posts",{method:"DELETE", cache:"no-store"});
+        if(res.ok){
+            setCommunityStatus("All community alerts deleted successfully.");
+            await loadCommunityPosts();
+            renderCommunityMarkers([]);
+        }else{
+            setCommunityStatus("Failed to delete all community alerts.", true);
+        }
+    }catch(_err){
+        setCommunityStatus("Network error while deleting all community alerts.", true);
+    }
 }
 
 async function sendHelpful(postId, isHelpful) {
@@ -2666,7 +3081,7 @@ function renderCommunityMarkers(posts){
 }
 
 function loadCommunityPosts(){
-    return fetch("/community-posts")
+    return fetch(`/community-posts?ts=${Date.now()}`, { cache: "no-store" })
     .then(res=>res.json())
     .then((data)=>{
         const posts=data.posts || [];
@@ -2682,8 +3097,7 @@ async function submitCommunityPost(){
         return;
     }
 
-    const input=document.getElementById("communityImageInput");
-    const file=input.files[0];
+    const file=selectedAlertFile;
     if(!file && !mobileCapturedImageData){
         setCommunityStatus("Select an image before uploading.",true);
         return;
@@ -2717,23 +3131,33 @@ async function submitCommunityPost(){
         });
         const data=await res.json();
         if(!res.ok) throw new Error(data.message || "Upload failed");
-        input.value="";
+        selectedAlertFile=null;
         mobileCapturedImageData=null;
+        document.getElementById("mobileAlertForm").style.display="none";
         if(desktopNoteEl) desktopNoteEl.value="";
         if(mobileNoteEl) mobileNoteEl.value="";
         const mobileInfo=document.getElementById("mobileSelectedImageInfo");
+        const imageInput=document.getElementById("communityImageInput");
+        const nativeCameraInput=document.getElementById("communityNativeCamera");
         if(mobileInfo) mobileInfo.innerText="";
+        if(imageInput) imageInput.value="";
+        if(nativeCameraInput) nativeCameraInput.value="";
+
+    // UI cleanup for desktop form
+    try {
+        const desktopInfo = document.getElementById("desktopSelectedImageInfo");
+        if (desktopInfo) desktopInfo.innerText = "";
+
+        closeDesktopAlertModal();
+    } catch(e) { /* UI cleanup is not critical, ignore error */ }
+
         setCommunityStatus("Community alert uploaded successfully.");
         try{
             await loadCommunityPosts();
         }catch(_uiErr){
             setCommunityStatus("Community alert uploaded. Feed refresh failed; retry page refresh.",true);
         }
-        try{
-            await calculateSafety();
-        }catch(_scoreErr){
-            setCameraStatus("Alert uploaded, but score refresh failed. Try Check Safety.","error");
-        }
+        setCameraStatus("Community alert submitted. Open Alerts to view the latest posts and reactions.","success");
     }catch(error){
         const msg=(error && error.message) ? error.message : "network error";
         if((msg || "").toLowerCase().includes("failed to fetch")){
@@ -2765,12 +3189,64 @@ function reactToPost(postId,reactionType){
     });
 }
 
+function toggleDesktopAlertForm() {
+    closeDesktopCommunityPanel();
+    const input = document.getElementById('communityImageInput');
+    const infoEl = document.getElementById('desktopSelectedImageInfo');
+    const noteEl = document.getElementById('communityNote');
+    const statusEl = document.getElementById('communityStatus');
+    selectedAlertFile = null;
+    if (input) input.value = '';
+    if (infoEl) infoEl.innerText = '';
+    if (noteEl) noteEl.value = '';
+    if (statusEl) statusEl.innerText = '';
+    document.getElementById('desktopAlertModal').style.display = 'flex';
+}
+
+function closeDesktopAlertModal() {
+    const input = document.getElementById('communityImageInput');
+    const infoEl = document.getElementById('desktopSelectedImageInfo');
+    const noteEl = document.getElementById('communityNote');
+    const statusEl = document.getElementById('communityStatus');
+    selectedAlertFile = null;
+    if (input) input.value = '';
+    if (infoEl) infoEl.innerText = '';
+    if (noteEl) noteEl.value = '';
+    if (statusEl) statusEl.innerText = '';
+    document.getElementById('desktopAlertModal').style.display = 'none';
+}
+
+function toggleDesktopCommunityPanel() {
+    const panel = document.getElementById('desktopCommunityPanel');
+    const overlay = document.getElementById('desktopCommunityOverlay');
+    if (!panel || !overlay || window.innerWidth <= 768) return;
+
+    const isOpen = panel.classList.contains('show');
+    if (isOpen) {
+        closeDesktopCommunityPanel();
+        return;
+    }
+
+    panel.classList.add('show');
+    overlay.style.display = 'block';
+    loadCommunityPosts().catch(() => {
+        setCommunityStatus("Could not load community alerts.", true);
+    });
+}
+
+function closeDesktopCommunityPanel() {
+    const panel = document.getElementById('desktopCommunityPanel');
+    const overlay = document.getElementById('desktopCommunityOverlay');
+    if (panel) panel.classList.remove('show');
+    if (overlay) overlay.style.display = 'none';
+}
+
 function captureFrameImage(video){
     const canvas=document.createElement("canvas");
     canvas.width=video.videoWidth;
     canvas.height=video.videoHeight;
     canvas.getContext("2d").drawImage(video,0,0);
-    return canvas.toDataURL("image/jpeg");
+    return canvas.toDataURL("image/jpeg", 1.0);
 }
 
 function formatVehicleSummary(vehicleMap){
@@ -2825,12 +3301,18 @@ function analyzeScene(mode="autosync"){
 
         if(mode==="vehicle"){
             setCameraStatus(`Vehicle detected: ${data.vehicle_count}. Types: ${vehicleSummary}. ${apiMsg}.${warningMsg}`,"success");
-            speakTextInLanguage(currentVoiceLang, `Vehicle analysis complete. Detected ${data.vehicle_count} vehicles.`);
+            let msgVehicle = `Vehicle analysis complete. Detected ${data.vehicle_count} vehicles.`;
+            if (currentVoiceLang === "te") msgVehicle = `Vehicle analysis పూర్తయింది. ${data.vehicle_count} vehicles detect అయ్యాయి.`;
+            if (currentVoiceLang === "hi") msgVehicle = `Vehicle analysis पूरा हुआ। ${data.vehicle_count} vehicles detect हुए हैं।`;
+            speakTextInLanguage(currentVoiceLang, msgVehicle);
             return;
         }
         if(mode==="crowd"){
             setCameraStatus(`Crowd detected: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${warningMsg}`,"success");
-            speakTextInLanguage(currentVoiceLang, `Crowd analysis complete. Crowd is ${data.crowd}.`);
+            let msgCrowd = `Crowd analysis complete. Crowd is ${data.crowd}.`;
+            if (currentVoiceLang === "te") msgCrowd = `Crowd analysis పూర్తయింది. Crowd ${data.crowd} గా ఉంది.`;
+            if (currentVoiceLang === "hi") msgCrowd = `Crowd analysis पूरा हुआ। Crowd ${data.crowd} है।`;
+            speakTextInLanguage(currentVoiceLang, msgCrowd);
             return;
         }
         if(mode==="mobile_detect"){
@@ -2838,10 +3320,10 @@ function analyzeScene(mode="autosync"){
                 `Detected vehicles: ${data.vehicle_count} (${vehicleSummary}). Crowd: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${warningMsg}`,
                 "success"
             );
-            speakTextInLanguage(
-                currentVoiceLang,
-                `Detection complete. Vehicles ${data.vehicle_count}. People ${data.crowd_count}. Crowd is ${data.crowd}.`
-            );
+            let msgDetect = `Detection complete. Vehicles ${data.vehicle_count}. People ${data.crowd_count}. Crowd is ${data.crowd}.`;
+            if (currentVoiceLang === "te") msgDetect = `Detection పూర్తయింది. Vehicles ${data.vehicle_count}. People ${data.crowd_count}. Crowd ${data.crowd} గా ఉంది.`;
+            if (currentVoiceLang === "hi") msgDetect = `Detection पूरा हुआ। Vehicles ${data.vehicle_count}. People ${data.crowd_count}. Crowd ${data.crowd} है।`;
+            speakTextInLanguage(currentVoiceLang, msgDetect);
             return;
         }
 
@@ -2862,6 +3344,27 @@ function analyzeScene(mode="autosync"){
     });
 }
 
+// Ask for Push Notification Permissions
+async function requestNotificationPermission() {
+  try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+          const reg = await navigator.serviceWorker.ready;
+          const token = await messaging.getToken({
+              vapidKey: "BJYaVrGysTl9uEP6zvycfu3iRdyhC2bUQaZ3aGoGk4wVJ_BtBBuJPVA5UGQbKYuaPy72rAZAWa3-dL7DcgzAFB4",
+              serviceWorkerRegistration: reg
+          });
+          if (token) {
+              fetch('/subscribe', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ token: token, user_token: userToken })
+              });
+          }
+      }
+  } catch (err) {}
+}
+
 // ==================== MAIN INIT + VOICE START ====================
 window.addEventListener("load", function(){
     initVoices();
@@ -2874,6 +3377,9 @@ window.addEventListener("load", function(){
         btn.classList.toggle('active', btn.id === `lang-${currentVoiceLang}`);
     });
     updateMobileLanguageButtons();
+
+    // Prompt for notifications shortly after app loads
+    setTimeout(requestNotificationPermission, 3000);
 
     {% if score %}
     animateScore({{score}});
@@ -2945,38 +3451,52 @@ function toggleTheme(){
 let mobileScoreTimer=null;
 
 function closeMobileSheets(){
-    const quick=document.getElementById("mobileQuickSheet");
+    const quick=document.getElementById("mobileQuickMenu");
     const lang=document.getElementById("mobileLangSheet");
     const menu=document.getElementById("mobileMenuSheet");
     const overlay=document.getElementById("mobileMenuOverlay");
+    const comm=document.getElementById("mobileCommunitySheet");
     if(quick) quick.classList.remove("show");
     if(lang) lang.classList.remove("show");
     if(menu) menu.classList.remove("show");
     if(overlay) overlay.classList.remove("show");
+    if(comm) comm.classList.remove("show");
 }
 
 function toggleMobileQuickSheet(){
-    const quick=document.getElementById("mobileQuickSheet");
+    const quick=document.getElementById("mobileQuickMenu");
     const lang=document.getElementById("mobileLangSheet");
     const menu=document.getElementById("mobileMenuSheet");
+    const overlay=document.getElementById("mobileMenuOverlay");
+    const comm=document.getElementById("mobileCommunitySheet");
     if(!quick) return;
     quick.classList.toggle("show");
     if(lang) lang.classList.remove("show");
     if(menu) menu.classList.remove("show");
+    if(comm) comm.classList.remove("show");
+    if(overlay){
+        overlay.classList.toggle("show", quick.classList.contains("show"));
+    }
 }
 
 function toggleMobileLangSheet(){
-    const quick=document.getElementById("mobileQuickSheet");
+    const quick=document.getElementById("mobileQuickMenu");
     const lang=document.getElementById("mobileLangSheet");
     const menu=document.getElementById("mobileMenuSheet");
+    const overlay=document.getElementById("mobileMenuOverlay");
+    const comm=document.getElementById("mobileCommunitySheet");
     if(!lang) return;
     lang.classList.toggle("show");
     if(quick) quick.classList.remove("show");
     if(menu) menu.classList.remove("show");
+    if(comm) comm.classList.remove("show");
+    if(overlay){
+        overlay.classList.toggle("show", lang.classList.contains("show"));
+    }
 }
 
 function toggleMobileMenu(){
-    const quick=document.getElementById("mobileQuickSheet");
+    const quick=document.getElementById("mobileQuickMenu");
     const lang=document.getElementById("mobileLangSheet");
     const menu=document.getElementById("mobileMenuSheet");
     const overlay=document.getElementById("mobileMenuOverlay");
@@ -2993,6 +3513,73 @@ function closeMobileMenu(){
     const overlay=document.getElementById("mobileMenuOverlay");
     if(menu) menu.classList.remove("show");
     if(overlay) overlay.classList.remove("show");
+}
+
+window.addEventListener("resize", ()=>{
+    if(window.innerWidth <= 768){
+        closeDesktopCommunityPanel();
+        return;
+    }
+    closeMobileSheets();
+});
+
+function toggleCommunitySheet(){
+    closeMobileSheets();
+    const sheet=document.getElementById("mobileCommunitySheet");
+    const overlay=document.getElementById("mobileMenuOverlay");
+    sheet.classList.toggle("show");
+    if(overlay) overlay.classList.toggle("show");
+    if(sheet.classList.contains("show")){
+        loadCommunityPosts();
+    }
+}
+
+function quickOpenNativeCamera(){
+    const input=document.getElementById("communityNativeCamera");
+    if(!input) return;
+    input.click();
+    closeMobileSheets();
+}
+
+function quickOpenGallery(){
+    const input=document.getElementById("communityImageInput");
+    if(!input) return;
+    input.click();
+    closeMobileSheets();
+}
+
+function quickOpenAlerts(){
+    toggleCommunitySheet();
+}
+
+function handleCommunityImageSelect(inputEl){
+    const file=inputEl.files[0];
+    if(!file) return;
+    selectedAlertFile=file;
+    if (isMobileCameraDevice()) {
+        toggleCommunitySheet();
+        document.getElementById("mobileAlertForm").style.display="block";
+        document.getElementById("mobileAlertPreview").src=URL.createObjectURL(file);
+    } else {
+        const infoEl = document.getElementById("desktopSelectedImageInfo");
+        if (infoEl) {
+            const name = file.name.length > 40 ? file.name.substring(0, 37) + '...' : file.name;
+            infoEl.innerText = 'Selected: ' + name;
+        }
+    }
+}
+
+function cancelCommunityPost(){
+    selectedAlertFile=null;
+    mobileCapturedImageData=null;
+    document.getElementById("mobileAlertForm").style.display="none";
+    const mobileNoteEl=document.getElementById("mobileCommunityNote");
+    const imageInput=document.getElementById("communityImageInput");
+    const nativeCameraInput=document.getElementById("communityNativeCamera");
+    if(mobileNoteEl) mobileNoteEl.value="";
+    if(imageInput) imageInput.value="";
+    if(nativeCameraInput) nativeCameraInput.value="";
+    setCommunityStatus("");
 }
 
 function setMobileCameraMode(mode){
@@ -3104,7 +3691,10 @@ function mobilePrimaryCameraAction(){
             preview.classList.add("show");
         }
         setCameraStatus("Photo captured. Tap 'Submit Alert' here or use '+' then 'Submit Community Alert'.","success");
-        speakTextInLanguage(currentVoiceLang, "Photo captured successfully.");
+        let msgCapture = "Photo captured successfully.";
+        if (currentVoiceLang === "te") msgCapture = "Photo successfully capture అయింది.";
+        if (currentVoiceLang === "hi") msgCapture = "Photo successfully capture हो गया है।";
+        speakTextInLanguage(currentVoiceLang, msgCapture);
         return;
     }
     analyzeScene("mobile_detect");
