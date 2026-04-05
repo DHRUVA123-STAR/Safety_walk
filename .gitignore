@@ -18,8 +18,12 @@ uploads/
 .env
 .env.*
 !.env.example
+firebase-adminsdk.json
 
 # Editor/OS
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local database
+community.db
