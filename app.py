@@ -239,6 +239,17 @@ def detect_crowd_opencv(img):
     crowd_label = "Dense" if people_count >= 4 else "Less"
     return people_count, crowd_label
 
+def merge_people_counts(image_bgr, people_count, mode="autosync"):
+    faces = detect_faces_haar(image_bgr)
+    face_count = len(faces)
+    
+    # Always take the highest count between YOLO/HOG full-body detection and Haar face detection
+    merged_people_count = max(people_count, face_count)
+
+    dense_threshold = 3 if mode in {"crowd", "mobile_detect"} else 4
+    crowd_label = "Dense" if merged_people_count >= dense_threshold else "Less"
+    return merged_people_count, crowd_label, face_count
+
 def get_yolo_detector():
     global _yolo_model, _yolo_disabled
     if _yolo_model is not None:
@@ -477,8 +488,8 @@ def detect_faces_haar(image_bgr):
     faces = face_cascade.detectMultiScale(
         gray,
         scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(36, 36)
+        minNeighbors=3,
+        minSize=(24, 24)
     )
     return faces
 
@@ -1126,8 +1137,15 @@ def requires_admin_auth(f):
 @app.route("/admin", methods=["GET"])
 @requires_admin_auth
 def admin_dashboard():
+    yolo_status = YOLO is not None
+    tomtom_status = bool(os.getenv("TOMTOM_API_KEY"))
+    return render_template("admin.html", yolo_status=yolo_status, tomtom_status=tomtom_status)
+
+@app.route("/admin/data", methods=["GET"])
+@requires_admin_auth
+def admin_data():
     feedbacks = []
-    user_count = 0
+    user_count = "-"
     avg_rating = 0
     
     if db:
@@ -1150,11 +1168,13 @@ def admin_dashboard():
             print(f"Admin fetch error: {e}")
 
     posts = fetch_posts_with_reactions()
-    yolo_status = YOLO is not None
-    tomtom_status = bool(os.getenv("TOMTOM_API_KEY"))
-
-    return render_template("admin.html", feedbacks=feedbacks, posts=posts, user_count=user_count, 
-                           avg_rating=avg_rating, yolo_status=yolo_status, tomtom_status=tomtom_status)
+    
+    return jsonify({
+        "feedbacks": feedbacks,
+        "user_count": user_count,
+        "avg_rating": avg_rating,
+        "posts": posts
+    })
 
 @app.route("/admin/broadcast", methods=["POST"])
 @requires_admin_auth
@@ -1218,10 +1238,12 @@ def analyze_scene():
             vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(
                 processed_img, brightness, allow_fast_empty=use_fast_empty, enable_full_pass=enable_full_pass
             )
+            people_count, crowd, face_count = merge_people_counts(processed_img, people_count, mode=mode)
             detector_used = yolo_mode
         except Exception:
             vehicle_count, vehicles_by_type = detect_vehicles_dnn(processed_img, confidence_threshold=0.30)
             people_count, crowd = detect_crowd_opencv(processed_img)
+            people_count, crowd, face_count = merge_people_counts(processed_img, people_count, mode=mode)
             detector_used = "mobilenet_hog"
 
         camera_traffic = estimate_traffic_from_vehicles(vehicle_count)
@@ -1248,6 +1270,7 @@ def analyze_scene():
             "vehicle_count": vehicle_count,
             "vehicles_by_type": vehicles_by_type,
             "crowd_count": people_count,
+            "face_count": face_count,
             "crowd": crowd,
             "camera_traffic": camera_traffic,
             "traffic": final_traffic,

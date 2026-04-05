@@ -92,15 +92,15 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <h3>Total Users (FCM)</h3>
-                <div class="value">{{ user_count }}</div>
+                <div class="value" id="adminUserCount">⏳</div>
             </div>
             <div class="stat-card">
                 <h3>Active Alerts</h3>
-                <div class="value">{{ posts|length }}</div>
+                <div class="value" id="adminActiveAlerts">⏳</div>
             </div>
             <div class="stat-card">
                 <h3>Avg App Rating</h3>
-                <div class="value">{{ avg_rating }} ★</div>
+                <div class="value" id="adminAvgRating">⏳</div>
             </div>
             <div class="stat-card {% if yolo_status %}status-active{% else %}status-inactive{% endif %}">
                 <h3>YOLO AI Model</h3>
@@ -128,25 +128,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for post in posts %}
-                        <tr>
-                            <td><a href="{{ post.image_url }}" target="_blank"><img src="{{ post.image_url }}" class="thumb-img"></a></td>
-                            <td>
-                                <strong>{{ post.tag }}</strong><br>
-                                <span style="font-size: 13px; color: #64748b;">{{ post.lat|round(4) }}, {{ post.lon|round(4) }}</span>
-                                <div style="font-size: 13px; margin-top: 4px;">{{ post.note }}</div>
-                            </td>
-                            <td>
-                                <span class="reaction-pill">Avoid: {{ post.reactions['Avoid'] }}</span>
-                                <span class="reaction-pill">Careful: {{ post.reactions['Careful'] }}</span>
-                                <span class="reaction-pill">Safe now: {{ post.reactions['Safe now'] }}</span>
-                            </td>
-                            <td class="date">{{ post.created_at[:10] }} <br> {{ post.created_at[11:16] }}</td>
-                            <td><button class="action-btn btn-danger" onclick="deleteAlert('{{ post.id }}')">Delete</button></td>
+                        <tr id="alertsLoading">
+                            <td colspan="5" style="text-align: center; color: #64748b; padding: 30px;">⏳ Loading community alerts...</td>
                         </tr>
-                        {% else %}
-                        <tr><td colspan="5" style="text-align: center; color: #64748b;">No active community alerts.</td></tr>
-                        {% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -155,7 +139,7 @@
         <!-- 3. Push Notification Broadcaster -->
         <div class="section">
             <h2>Broadcast Push Notification</h2>
-            <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Send a manual emergency or update alert to all {{ user_count }} subscribed devices.</p>
+            <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Send a manual emergency or update alert to all <strong id="bcUserCount">...</strong> subscribed devices.</p>
             <div class="form-group">
                 <label>Notification Title</label>
                 <input type="text" id="bcTitle" placeholder="e.g., Severe Weather Warning">
@@ -171,7 +155,7 @@
         <div class="section">
             <h2>User Feedback</h2>
             <div class="table-container">
-                <table>
+                <table id="feedbackTable">
                     <thead>
                         <tr>
                             <th>Date (UTC)</th>
@@ -180,15 +164,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for fb in feedbacks %}
-                        <tr>
-                            <td class="date">{{ fb.created_at[:10] }} <br> {{ fb.created_at[11:16] }}</td>
-                            <td><span class="rating-badge rating-{{ fb.rating }}">{{ fb.rating }} ★</span></td>
-                            <td>{{ fb.comment or '<span class="no-comment">No comment</span>'|safe }}</td>
+                        <tr id="fbLoading">
+                            <td colspan="3" style="text-align: center; color: #64748b; padding: 30px;">⏳ Loading user feedback...</td>
                         </tr>
-                        {% else %}
-                        <tr><td colspan="3" style="text-align: center; color: #64748b;">No feedback received yet.</td></tr>
-                        {% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -207,6 +185,68 @@
     </div>
 
     <script>
+        // Fetch all data instantly after page loads
+        document.addEventListener("DOMContentLoaded", async () => {
+            try {
+                const res = await fetch("/admin/data");
+                const data = await res.json();
+
+                // Populate Top Stat Cards
+                document.getElementById("adminUserCount").innerText = data.user_count;
+                document.getElementById("adminActiveAlerts").innerText = data.posts.length;
+                document.getElementById("adminAvgRating").innerText = data.avg_rating + " ★";
+                document.getElementById("bcUserCount").innerText = data.user_count;
+
+                // Populate Alert Moderation Table
+                const alertsBody = document.querySelector("#alertsTable tbody");
+                alertsBody.innerHTML = "";
+                if (data.posts.length === 0) {
+                    alertsBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b;">No active community alerts.</td></tr>`;
+                } else {
+                    data.posts.forEach(post => {
+                        const avoid = post.reactions?.['Avoid'] || 0;
+                        const careful = post.reactions?.['Careful'] || 0;
+                        const safe = post.reactions?.['Safe now'] || 0;
+                        const lat = post.lat !== undefined ? post.lat.toFixed(4) : "0.0000";
+                        const lon = post.lon !== undefined ? post.lon.toFixed(4) : "0.0000";
+                        const dateText = post.created_at ? `${post.created_at.substring(0,10)} <br> ${post.created_at.substring(11,16)}` : "";
+                        
+                        alertsBody.innerHTML += `
+                            <tr>
+                                <td><a href="${post.image_url}" target="_blank"><img src="${post.image_url}" class="thumb-img"></a></td>
+                                <td>
+                                    <strong>${post.tag}</strong><br>
+                                    <span style="font-size: 13px; color: #64748b;">${lat}, ${lon}</span>
+                                    <div style="font-size: 13px; margin-top: 4px;">${post.note || ""}</div>
+                                </td>
+                                <td>
+                                    <span class="reaction-pill">Avoid: ${avoid}</span>
+                                    <span class="reaction-pill">Careful: ${careful}</span>
+                                    <span class="reaction-pill">Safe now: ${safe}</span>
+                                </td>
+                                <td class="date">${dateText}</td>
+                                <td><button class="action-btn btn-danger" onclick="deleteAlert('${post.id}')">Delete</button></td>
+                            </tr>`;
+                    });
+                }
+
+                // Populate Feedback Table
+                const fbBody = document.querySelector("#feedbackTable tbody");
+                fbBody.innerHTML = "";
+                if (data.feedbacks.length === 0) {
+                    fbBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #64748b;">No feedback received yet.</td></tr>`;
+                } else {
+                    data.feedbacks.forEach(fb => {
+                        const dateText = fb.created_at ? `${fb.created_at.substring(0,10)} <br> ${fb.created_at.substring(11,16)}` : "";
+                        const comment = fb.comment ? fb.comment : '<span class="no-comment">No comment</span>';
+                        fbBody.innerHTML += `<tr><td class="date">${dateText}</td><td><span class="rating-badge rating-${fb.rating}">${fb.rating} ★</span></td><td>${comment}</td></tr>`;
+                    });
+                }
+            } catch (err) {
+                document.getElementById("alertsLoading").innerHTML = `<td colspan="5" style="text-align: center; color: #ef4444;">Failed to load data. Please refresh the page.</td>`;
+            }
+        });
+
         // Real-time table filter for Alert Moderation
         function filterAlerts() {
             const filter = document.getElementById("alertSearchInput").value.toLowerCase();

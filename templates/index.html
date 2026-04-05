@@ -2714,9 +2714,23 @@ async function recognizeIntentInLanguage(langKey){
                 transcript += event.results[i][0].transcript + " ";
             }
             bestTranscript = transcript.trim();
+            
+            // Provide immediate live feedback on the screen
+            if(bestTranscript.length > 0){
+                setCameraStatus(`Hearing: "${bestTranscript}"...`);
+                
+                // Instantly trigger if a known command is detected (removes delay)
+                const quickMatch = detectVoiceIntent(bestTranscript, langKey);
+                if (quickMatch && quickMatch.intent && quickMatch.score >= 0.75) {
+                    clearTimeout(timer);
+                    recognition.stop();
+                    resolve({transcript: bestTranscript});
+                    return;
+                }
+            }
 
             // Early exit on good final result
-            if(event.results[event.results.length-1].isFinal && bestTranscript.length > 6){
+            if(event.results[event.results.length-1].isFinal && bestTranscript.length > 3){
                 clearTimeout(timer);
                 recognition.stop();
                 resolve({transcript: bestTranscript});
@@ -3299,13 +3313,17 @@ function analyzeScene(mode="autosync"){
         updateMobileSnapshot();
 
         const vehicleSummary=formatVehicleSummary(data.vehicles_by_type);
-        const apiMsg=data.traffic_api && data.traffic_api.available
-            ? `traffic API: ${data.traffic_api.provider} (${data.traffic_api.traffic})`
-            : `traffic API unavailable, fallback camera traffic: ${data.camera_traffic}`;
+        
+        let apiMsg = "";
+        if (mode === "autosync") {
+            apiMsg = data.traffic_api && data.traffic_api.available
+                ? ` traffic API: ${data.traffic_api.provider} (${data.traffic_api.traffic}).`
+                : ` traffic API unavailable, fallback camera traffic: ${data.camera_traffic}.`;
+        }
         const warningMsg=data.low_light_warning ? ` ${data.low_light_warning}` : "";
 
         if(mode==="vehicle"){
-            setCameraStatus(`Vehicle detected: ${data.vehicle_count}. Types: ${vehicleSummary}. ${apiMsg}.${warningMsg}`,"success");
+            setCameraStatus(`Vehicle detected: ${data.vehicle_count}. Types: ${vehicleSummary}.${warningMsg}`,"success");
             let msgVehicle = `Vehicle analysis complete. Detected ${data.vehicle_count} vehicles.`;
             if (currentVoiceLang === "te") msgVehicle = `Vehicle analysis పూర్తయింది. ${data.vehicle_count} vehicles detect అయ్యాయి.`;
             if (currentVoiceLang === "hi") msgVehicle = `Vehicle analysis पूरा हुआ। ${data.vehicle_count} vehicles detect हुए हैं।`;
@@ -3332,7 +3350,7 @@ function analyzeScene(mode="autosync"){
             return;
         }
 
-        setCameraStatus(`Auto Sync complete: Vehicles ${data.vehicle_count}, Crowd ${data.crowd}, Lighting ${data.lighting}, Traffic ${data.traffic}. Updating score...${warningMsg}`,"success");
+        setCameraStatus(`Auto Sync complete: Vehicles ${data.vehicle_count}, Crowd ${data.crowd}, Lighting ${data.lighting}, Traffic ${data.traffic}.${apiMsg}${warningMsg}`,"success");
         calculateSafety()
         .then((scoreData)=>{
             stopCamera();
@@ -3410,6 +3428,7 @@ window.addEventListener("load", function(){
 });
 
 // GPS + Map
+setCameraStatus("Acquiring GPS location for local traffic...", "success");
 navigator.geolocation.getCurrentPosition(function(position){
     const lat=position.coords.latitude;
     const lon=position.coords.longitude;
@@ -3452,6 +3471,13 @@ navigator.geolocation.getCurrentPosition(function(position){
 function toggleTheme(){
     document.body.classList.toggle("dark-mode");
 }
+
+// Stop camera when app is minimized on mobile to prevent memory crashes
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        stopCamera();
+    }
+});
 
 let mobileScoreTimer=null;
 
@@ -3974,7 +4000,10 @@ function stopCamera(){
     cameraPanel.classList.remove("live");
 
     if(videoStream){
-        videoStream.getTracks().forEach(track=>track.stop());
+        videoStream.getTracks().forEach(track=>{
+            track.enabled = false;
+            track.stop();
+        });
         videoStream=null;
     }
     if(fsVideo){
