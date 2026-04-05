@@ -1,5 +1,6 @@
 ﻿from flask import Flask, render_template, request, jsonify, send_from_directory, Response
 from functools import wraps
+from flask import redirect, session, url_for
 from datetime import datetime, timedelta
 import math
 import cv2
@@ -49,6 +50,7 @@ def load_local_env():
                 os.environ[key] = value
 
 load_local_env()
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "local-admin-secret-key")
 
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
@@ -1119,20 +1121,38 @@ def check_admin_auth(username, password):
         return False
     return username == admin_user and password == admin_pass
 
-def request_admin_auth():
-    return Response(
-        'Admin Access Required', 401,
-        {'WWW-Authenticate': 'Basic realm="Admin Login"'}
-    )
-
 def requires_admin_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_admin_auth(auth.username, auth.password):
-            return request_admin_auth()
+        if not session.get("admin_authenticated"):
+            return redirect(url_for("admin_login", next=request.path))
         return f(*args, **kwargs)
     return decorated
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    error_message = ""
+    next_url = request.args.get("next") or request.form.get("next") or url_for("admin_dashboard")
+
+    if session.get("admin_authenticated"):
+        return redirect(next_url)
+
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        if check_admin_auth(username, password):
+            session["admin_authenticated"] = True
+            session["admin_username"] = username
+            return redirect(next_url)
+        error_message = "Invalid username or password."
+
+    return render_template("admin_login.html", error_message=error_message, next_url=next_url)
+
+@app.route("/admin/logout", methods=["POST"])
+def admin_logout():
+    session.pop("admin_authenticated", None)
+    session.pop("admin_username", None)
+    return redirect(url_for("admin_login"))
 
 @app.route("/admin", methods=["GET"])
 @requires_admin_auth

@@ -81,11 +81,17 @@
 
         .danger-zone { background: #fef2f2; border: 1px solid #fecaca; }
         .danger-zone h2 { color: #dc2626; border-bottom-color: #fecaca; }
+        .refresh-note { color: #64748b; font-size: 13px; margin: 0 0 16px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="header-title">App Admin Command Center</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px;">
+            <h1 class="header-title" style="margin-bottom: 0;">App Admin Command Center</h1>
+            <form method="post" action="{{ url_for('admin_logout') }}" style="margin: 0;">
+                <button type="submit" class="action-btn btn-danger">Logout</button>
+            </form>
+        </div>
 
         <div class="stats-grid">
             <div class="stat-card">
@@ -113,6 +119,7 @@
                 <h2 style="margin: 0; border: none; padding: 0;">Alert Moderation</h2>
                 <input type="text" id="alertSearchInput" onkeyup="filterAlerts()" placeholder="Search tags, notes, dates..." style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; width: 100%; max-width: 250px; margin-top: 10px;">
             </div>
+            <p class="refresh-note" id="refreshNote">Admin data updates automatically.</p>
             <div class="table-container">
                 <table id="alertsTable">
                     <thead>
@@ -216,6 +223,118 @@
     </div>
 
     <script>
+        let adminRefreshTimer = null;
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function formatDateCell(createdAt) {
+            if (!createdAt) return "";
+            return `${escapeHtml(createdAt.substring(0, 10))} <br> ${escapeHtml(createdAt.substring(11, 16))}`;
+        }
+
+        function updateRefreshNote() {
+            const refreshNote = document.getElementById("refreshNote");
+            if (!refreshNote) return;
+            const now = new Date();
+            const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            refreshNote.innerText = `Admin data updates automatically. Last synced at ${time}.`;
+        }
+
+        function renderAlerts(posts) {
+            const alertsBody = document.querySelector("#alertsTable tbody");
+            if (!alertsBody) return;
+
+            if (!posts.length) {
+                alertsBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 30px;">No active community alerts.</td></tr>`;
+                return;
+            }
+
+            alertsBody.innerHTML = posts.map(post => {
+                const avoid = post.reactions?.Avoid || 0;
+                const careful = post.reactions?.Careful || 0;
+                const safe = post.reactions?.["Safe now"] || 0;
+                const lat = typeof post.lat === "number" ? post.lat.toFixed(4) : "0.0000";
+                const lon = typeof post.lon === "number" ? post.lon.toFixed(4) : "0.0000";
+                const imageUrl = escapeHtml(post.image_url || "");
+                const tag = escapeHtml(post.tag || "");
+                const note = escapeHtml(post.note || "");
+                const postId = escapeHtml(post.id || "");
+
+                return `
+                    <tr>
+                        <td><a href="${imageUrl}" target="_blank"><img src="${imageUrl}" class="thumb-img"></a></td>
+                        <td>
+                            <strong>${tag}</strong><br>
+                            <span style="font-size: 13px; color: #64748b;">${lat}, ${lon}</span>
+                            <div style="font-size: 13px; margin-top: 4px;">${note}</div>
+                        </td>
+                        <td>
+                            <span class="reaction-pill">Avoid: ${avoid}</span>
+                            <span class="reaction-pill">Careful: ${careful}</span>
+                            <span class="reaction-pill">Safe now: ${safe}</span>
+                        </td>
+                        <td class="date">${formatDateCell(post.created_at)}</td>
+                        <td><button class="action-btn btn-danger" onclick="deleteAlert('${postId}')">Delete</button></td>
+                    </tr>
+                `;
+            }).join("");
+        }
+
+        function renderFeedback(feedbacks) {
+            const fbBody = document.querySelector("#feedbackTable tbody");
+            if (!fbBody) return;
+
+            if (!feedbacks.length) {
+                fbBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #64748b; padding: 30px;">No feedback received yet.</td></tr>`;
+                return;
+            }
+
+            fbBody.innerHTML = feedbacks.map(fb => {
+                const rating = Number(fb.rating) || 0;
+                const comment = fb.comment ? escapeHtml(fb.comment) : '<span class="no-comment">No comment</span>';
+                return `
+                    <tr>
+                        <td class="date">${formatDateCell(fb.created_at)}</td>
+                        <td><span class="rating-badge rating-${rating}">${rating} / 5</span></td>
+                        <td>${comment}</td>
+                    </tr>
+                `;
+            }).join("");
+        }
+
+        function renderAdminData(data) {
+            document.getElementById("adminUserCount").innerText = data.user_count;
+            document.getElementById("adminActiveAlerts").innerText = data.posts.length;
+            document.getElementById("adminAvgRating").innerText = `${data.avg_rating} / 5`;
+            document.getElementById("bcUserCount").innerText = data.user_count;
+            renderAlerts(data.posts || []);
+            renderFeedback(data.feedbacks || []);
+            filterAlerts();
+            updateRefreshNote();
+        }
+
+        async function refreshAdminData() {
+            try {
+                const res = await fetch("/admin/data", { credentials: "same-origin", cache: "no-store" });
+                if (res.redirected && res.url.includes("/admin/login")) {
+                    window.location.href = res.url;
+                    return;
+                }
+                const contentType = res.headers.get("content-type") || "";
+                if (!res.ok || !contentType.includes("application/json")) return;
+                const data = await res.json();
+                renderAdminData(data);
+            } catch (_err) {
+            }
+        }
+
         function filterAlerts() {
             const filter = document.getElementById("alertSearchInput").value.toLowerCase();
             const rows = document.querySelectorAll("#alertsTable tbody tr");
@@ -279,6 +398,11 @@
             if (res.ok) window.location.reload();
             else alert("Failed to wipe database.");
         }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            updateRefreshNote();
+            adminRefreshTimer = window.setInterval(refreshAdminData, 30000);
+        });
     </script>
 </body>
 </html>
