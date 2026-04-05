@@ -104,7 +104,7 @@
             </div>
             <div class="stat-card">
                 <h3>Avg App Rating</h3>
-                <div class="value" id="adminAvgRating">{{ avg_rating }} / 5</div>
+                <div class="value" id="adminAvgRating">{{ avg_rating }}{% if avg_rating != '--' %} / 5{% endif %}</div>
             </div>
             <div class="stat-card {% if yolo_status %}status-active{% else %}status-inactive{% endif %}">
                 <h3>YOLO AI Model</h3>
@@ -119,7 +119,7 @@
                 <h2 style="margin: 0; border: none; padding: 0;">Alert Moderation</h2>
                 <input type="text" id="alertSearchInput" onkeyup="filterAlerts()" placeholder="Search tags, notes, dates..." style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; width: 100%; max-width: 250px; margin-top: 10px;">
             </div>
-            <p class="refresh-note" id="refreshNote">Admin data updates automatically.</p>
+            <p class="refresh-note" id="refreshNote">Opening dashboard and loading latest admin data.</p>
             <div class="table-container">
                 <table id="alertsTable">
                     <thead>
@@ -156,7 +156,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="5" style="text-align: center; color: #64748b; padding: 30px;">No active community alerts.</td>
+                                <td colspan="5" style="text-align: center; color: #64748b; padding: 30px;">Loading latest community alerts.</td>
                             </tr>
                         {% endif %}
                     </tbody>
@@ -204,7 +204,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="3" style="text-align: center; color: #64748b; padding: 30px;">No feedback received yet.</td>
+                                <td colspan="3" style="text-align: center; color: #64748b; padding: 30px;">Loading latest user feedback.</td>
                             </tr>
                         {% endif %}
                     </tbody>
@@ -239,12 +239,12 @@
             return `${escapeHtml(createdAt.substring(0, 10))} <br> ${escapeHtml(createdAt.substring(11, 16))}`;
         }
 
-        function updateRefreshNote() {
+        function updateRefreshNote(message) {
             const refreshNote = document.getElementById("refreshNote");
             if (!refreshNote) return;
             const now = new Date();
             const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            refreshNote.innerText = `Admin data updates automatically. Last synced at ${time}.`;
+            refreshNote.innerText = message || `Admin data updates automatically. Last synced at ${time}.`;
         }
 
         function renderAlerts(posts) {
@@ -332,6 +332,7 @@
                 const data = await res.json();
                 renderAdminData(data);
             } catch (_err) {
+                updateRefreshNote("Dashboard opened. Latest data is still loading.");
             }
         }
 
@@ -400,7 +401,8 @@
         }
 
         document.addEventListener("DOMContentLoaded", () => {
-            updateRefreshNote();
+            updateRefreshNote("Dashboard opened. Loading latest admin data.");
+            refreshAdminData();
             adminRefreshTimer = window.setInterval(refreshAdminData, 30000);
         });
     </script>

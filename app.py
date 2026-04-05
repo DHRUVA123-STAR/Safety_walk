@@ -2,6 +2,7 @@
 from functools import wraps
 from flask import redirect, session, url_for
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import math
 import cv2
 import numpy as np
@@ -32,6 +33,7 @@ CITY_LON = 80.6480
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIRESTORE_TIMEOUT_SEC = float(os.getenv("FIRESTORE_TIMEOUT_SEC", "8"))
 ANALYZE_MAX_DIM = int(os.getenv("ANALYZE_MAX_DIM", "640"))
+ADMIN_DATA_TIMEOUT_SEC = float(os.getenv("ADMIN_DATA_TIMEOUT_SEC", "4.5"))
 
 # Lightweight .env loader
 def load_local_env():
@@ -100,6 +102,13 @@ _yolo_model = None
 _yolo_model_lock = threading.Lock()
 _yolo_disabled = False
 YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8n.pt")
+_admin_dashboard_cache = {
+    "feedbacks": [],
+    "user_count": "--",
+    "avg_rating": 0,
+    "posts": []
+}
+_admin_dashboard_cache_lock = threading.Lock()
 
 def log_service_status():
     print(f"TOMTOM_API_KEY set: {bool(os.getenv('TOMTOM_API_KEY'))}")
@@ -806,14 +815,15 @@ def haversine_km(lat1, lon1, lat2, lon2):
     a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
     return 2 * r * math.asin(math.sqrt(a))
 
-def fetch_posts_with_reactions():
+def fetch_posts_with_reactions(timeout_sec=None):
     if not db:
         return []
+    timeout_sec = timeout_sec or FIRESTORE_TIMEOUT_SEC
     try:
         docs = db.collection('community_posts').order_by(
             'created_at',
             direction=firestore.Query.DESCENDING
-        ).limit(50).stream(timeout=FIRESTORE_TIMEOUT_SEC)
+        ).limit(50).stream(timeout=timeout_sec)
         posts = []
         for doc in docs:
             data = doc.to_dict()
@@ -841,11 +851,12 @@ def fetch_posts_with_reactions():
         print(f"Community posts fetch error: {e}")
         return []
 
-def count_fcm_users(max_docs=1000):
+def count_fcm_users(max_docs=1000, timeout_sec=None):
     if not db:
         return 0
+    timeout_sec = timeout_sec or FIRESTORE_TIMEOUT_SEC
     try:
-        docs = db.collection("fcm_tokens").limit(max_docs + 1).stream(timeout=FIRESTORE_TIMEOUT_SEC)
+        docs = db.collection("fcm_tokens").limit(max_docs + 1).stream(timeout=timeout_sec)
         count = 0
         for _ in docs:
             count += 1
@@ -855,6 +866,29 @@ def count_fcm_users(max_docs=1000):
     except Exception as e:
         print(f"FCM token count error: {e}")
         return 0
+
+def fetch_admin_feedbacks(timeout_sec=None):
+    feedbacks = []
+    avg_rating = 0
+    if not db:
+        return feedbacks, avg_rating
+    timeout_sec = timeout_sec or ADMIN_DATA_TIMEOUT_SEC
+    try:
+        f_docs = db.collection('app_feedback').order_by(
+            'created_at',
+            direction=firestore.Query.DESCENDING
+        ).limit(100).stream(timeout=timeout_sec)
+        total_stars = 0
+        for doc in f_docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            feedbacks.append(data)
+            total_stars += data.get('rating', 0)
+        if feedbacks:
+            avg_rating = round(total_stars / len(feedbacks), 1)
+    except Exception as e:
+        print(f"Admin feedback fetch error: {e}")
+    return feedbacks, avg_rating
 
 def compute_community_penalty(lat, lon):
     if lat is None or lon is None:
@@ -1159,48 +1193,66 @@ def admin_logout():
 def admin_dashboard():
     yolo_status = YOLO is not None
     tomtom_status = bool(os.getenv("TOMTOM_API_KEY"))
-    dashboard_data = get_admin_dashboard_data()
     return render_template(
         "admin.html",
         yolo_status=yolo_status,
         tomtom_status=tomtom_status,
-        feedbacks=dashboard_data["feedbacks"],
-        user_count=dashboard_data["user_count"],
-        avg_rating=dashboard_data["avg_rating"],
-        posts=dashboard_data["posts"]
+        feedbacks=[],
+        user_count="--",
+        avg_rating="--",
+        posts=[]
     )
 
 def get_admin_dashboard_data():
-    feedbacks = []
-    user_count = "-"
-    avg_rating = 0
+    with _admin_dashboard_cache_lock:
+        cached = {
+            "feedbacks": list(_admin_dashboard_cache.get("feedbacks", [])),
+            "user_count": _admin_dashboard_cache.get("user_count", "--"),
+            "avg_rating": _admin_dashboard_cache.get("avg_rating", 0),
+            "posts": list(_admin_dashboard_cache.get("posts", []))
+        }
 
-    if db:
+    if not db:
+        return cached
+
+    result = dict(cached)
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        future_feedbacks = executor.submit(fetch_admin_feedbacks, ADMIN_DATA_TIMEOUT_SEC)
+        future_users = executor.submit(count_fcm_users, 1000, ADMIN_DATA_TIMEOUT_SEC)
+        future_posts = executor.submit(fetch_posts_with_reactions, ADMIN_DATA_TIMEOUT_SEC)
+
         try:
-            f_docs = db.collection('app_feedback').order_by(
-                'created_at',
-                direction=firestore.Query.DESCENDING
-            ).limit(100).stream(timeout=FIRESTORE_TIMEOUT_SEC)
-            total_stars = 0
-            for doc in f_docs:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                feedbacks.append(data)
-                total_stars += data.get('rating', 0)
-            if feedbacks:
-                avg_rating = round(total_stars / len(feedbacks), 1)
-
-            user_count = count_fcm_users()
+            feedbacks, avg_rating = future_feedbacks.result(timeout=ADMIN_DATA_TIMEOUT_SEC)
+            result["feedbacks"] = feedbacks
+            result["avg_rating"] = avg_rating
+        except FuturesTimeoutError:
+            print("Admin feedback fetch timed out; using cached snapshot.")
         except Exception as e:
-            print(f"Admin fetch error: {e}")
+            print(f"Admin feedback future error: {e}")
 
-    posts = fetch_posts_with_reactions()
-    return {
-        "feedbacks": feedbacks,
-        "user_count": user_count,
-        "avg_rating": avg_rating,
-        "posts": posts
-    }
+        try:
+            result["user_count"] = future_users.result(timeout=ADMIN_DATA_TIMEOUT_SEC)
+        except FuturesTimeoutError:
+            print("Admin user count fetch timed out; using cached snapshot.")
+        except Exception as e:
+            print(f"Admin user count future error: {e}")
+
+        try:
+            result["posts"] = future_posts.result(timeout=ADMIN_DATA_TIMEOUT_SEC)
+        except FuturesTimeoutError:
+            print("Admin posts fetch timed out; using cached snapshot.")
+        except Exception as e:
+            print(f"Admin posts future error: {e}")
+
+    with _admin_dashboard_cache_lock:
+        _admin_dashboard_cache.update({
+            "feedbacks": list(result["feedbacks"]),
+            "user_count": result["user_count"],
+            "avg_rating": result["avg_rating"],
+            "posts": list(result["posts"])
+        })
+
+    return result
 
 @app.route("/admin/data", methods=["GET"])
 @requires_admin_auth
