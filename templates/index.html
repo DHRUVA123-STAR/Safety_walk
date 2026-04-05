@@ -3259,13 +3259,13 @@ function captureFrameImage(video, mode="autosync"){
     const canvas=document.createElement("canvas");
     const rawWidth=video.videoWidth;
     const rawHeight=video.videoHeight;
-    const maxDim=mode==="autosync" ? 720 : 512;
+    const maxDim=mode==="autosync" ? 480 : 320;
     const longestSide=Math.max(rawWidth, rawHeight);
     const scale=longestSide > maxDim ? (maxDim / longestSide) : 1;
     canvas.width=Math.max(1, Math.round(rawWidth * scale));
     canvas.height=Math.max(1, Math.round(rawHeight * scale));
     canvas.getContext("2d").drawImage(video,0,0);
-    return canvas.toDataURL("image/jpeg", 0.72);
+    return canvas.toDataURL("image/jpeg", 0.60);
 }
 
 function formatVehicleSummary(vehicleMap){

@@ -1238,12 +1238,22 @@ def analyze_scene():
             vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(
                 processed_img, brightness, allow_fast_empty=use_fast_empty, enable_full_pass=enable_full_pass
             )
-            people_count, crowd, face_count = merge_people_counts(processed_img, people_count, mode=mode)
+            if mode in ["crowd", "autosync", "mobile_detect"]:
+                people_count, crowd, face_count = merge_people_counts(processed_img, people_count, mode=mode)
+            else:
+                face_count = 0
             detector_used = yolo_mode
         except Exception:
-            vehicle_count, vehicles_by_type = detect_vehicles_dnn(processed_img, confidence_threshold=0.30)
-            people_count, crowd = detect_crowd_opencv(processed_img)
-            people_count, crowd, face_count = merge_people_counts(processed_img, people_count, mode=mode)
+            if mode in ["vehicle", "autosync", "mobile_detect"]:
+                vehicle_count, vehicles_by_type = detect_vehicles_dnn(processed_img, confidence_threshold=0.30)
+            else:
+                vehicle_count, vehicles_by_type = 0, {}
+                
+            if mode in ["crowd", "autosync", "mobile_detect"]:
+                people_count, crowd = detect_crowd_opencv(processed_img)
+                people_count, crowd, face_count = merge_people_counts(processed_img, people_count, mode=mode)
+            else:
+                people_count, crowd, face_count = 0, "Less", 0
             detector_used = "mobilenet_hog"
 
         camera_traffic = estimate_traffic_from_vehicles(vehicle_count)

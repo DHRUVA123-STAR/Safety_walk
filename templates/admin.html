@@ -188,7 +188,8 @@
         // Fetch all data instantly after page loads
         document.addEventListener("DOMContentLoaded", async () => {
             try {
-                const res = await fetch("/admin/data");
+                const res = await fetch("/admin/data", { credentials: "same-origin" });
+                if (!res.ok) throw new Error("Server timeout or authentication error");
                 const data = await res.json();
 
                 // Populate Top Stat Cards
@@ -243,7 +244,12 @@
                     });
                 }
             } catch (err) {
-                document.getElementById("alertsLoading").innerHTML = `<td colspan="5" style="text-align: center; color: #ef4444;">Failed to load data. Please refresh the page.</td>`;
+                const errorHtml = `<td colspan="5" style="text-align: center; color: #ef4444; padding: 20px;">⚠️ Connection timeout. Railway might be waking up. Please refresh the page.</td>`;
+                document.getElementById("alertsLoading").innerHTML = errorHtml;
+                document.getElementById("fbLoading").innerHTML = `<td colspan="3" style="text-align: center; color: #ef4444; padding: 20px;">⚠️ Failed to load feedback. Please refresh.</td>`;
+                document.getElementById("adminUserCount").innerText = "-";
+                document.getElementById("adminActiveAlerts").innerText = "-";
+                document.getElementById("adminAvgRating").innerText = "-";
             }
         });
 
