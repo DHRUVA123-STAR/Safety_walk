@@ -30,6 +30,7 @@ CITY_LAT = 16.5062
 CITY_LON = 80.6480
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIRESTORE_TIMEOUT_SEC = float(os.getenv("FIRESTORE_TIMEOUT_SEC", "8"))
+ANALYZE_MAX_DIM = int(os.getenv("ANALYZE_MAX_DIM", "640"))
 
 # Lightweight .env loader
 def load_local_env():
@@ -285,6 +286,17 @@ def preprocess_for_detection(img):
 
     return out
 
+def resize_for_analysis(img, max_dim=ANALYZE_MAX_DIM):
+    height, width = img.shape[:2]
+    longest_side = max(height, width)
+    if longest_side <= max_dim:
+        return img
+
+    scale = max_dim / float(longest_side)
+    resized_width = max(1, int(width * scale))
+    resized_height = max(1, int(height * scale))
+    return cv2.resize(img, (resized_width, resized_height), interpolation=cv2.INTER_AREA)
+
 def yolo_conf_threshold(brightness):
     if brightness < 40:
         return 0.25
@@ -292,7 +304,7 @@ def yolo_conf_threshold(brightness):
         return 0.30
     return 0.35
 
-def detect_scene_yolo(img, brightness, allow_fast_empty=True):
+def detect_scene_yolo(img, brightness, allow_fast_empty=True, enable_full_pass=True):
     detector = get_yolo_detector()
     conf = yolo_conf_threshold(brightness)
     # COCO ids: person=0, bicycle=1, car=2, motorcycle=3, bus=5, truck=7
@@ -334,13 +346,15 @@ def detect_scene_yolo(img, brightness, allow_fast_empty=True):
         conf=quick_conf,
         iou=0.5,
         verbose=False,
-        imgsz=320,
+        imgsz=256,
         classes=target_classes,
         max_det=12
     )
     quick_vehicle_count, quick_vehicles_by_type, quick_people_count, quick_crowd = parse_results(quick_results)
     if allow_fast_empty and quick_vehicle_count == 0 and quick_people_count == 0:
         return quick_vehicle_count, quick_vehicles_by_type, quick_people_count, quick_crowd, "yolov8n-fast-empty"
+    if not enable_full_pass:
+        return quick_vehicle_count, quick_vehicles_by_type, quick_people_count, quick_crowd, "yolov8n-quick"
 
     # Full pass only when quick pass detects likely objects.
     full_results = detector.predict(
@@ -348,9 +362,9 @@ def detect_scene_yolo(img, brightness, allow_fast_empty=True):
         conf=conf,
         iou=0.5,
         verbose=False,
-        imgsz=448,
+        imgsz=384,
         classes=target_classes,
-        max_det=48
+        max_det=32
     )
     vehicle_count, vehicles_by_type, people_count, crowd = parse_results(full_results)
     return vehicle_count, vehicles_by_type, people_count, crowd, "yolov8n-full"
@@ -1194,13 +1208,15 @@ def analyze_scene():
             return jsonify({"ok": False, "message": "Unable to decode image frame on server."}), 400
 
         mode = (data.get("mode") or "autosync").lower()
-        processed_img = preprocess_for_detection(img)
+        resized_img = resize_for_analysis(img)
+        processed_img = preprocess_for_detection(resized_img)
         lighting, brightness = detect_lighting(processed_img)
         detector_used = "fallback"
         try:
             use_fast_empty = mode != "mobile_detect"
+            enable_full_pass = mode == "autosync"
             vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(
-                processed_img, brightness, allow_fast_empty=use_fast_empty
+                processed_img, brightness, allow_fast_empty=use_fast_empty, enable_full_pass=enable_full_pass
             )
             detector_used = yolo_mode
         except Exception:

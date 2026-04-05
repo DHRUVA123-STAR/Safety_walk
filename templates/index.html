@@ -3241,12 +3241,17 @@ function closeDesktopCommunityPanel() {
     if (overlay) overlay.style.display = 'none';
 }
 
-function captureFrameImage(video){
+function captureFrameImage(video, mode="autosync"){
     const canvas=document.createElement("canvas");
-    canvas.width=video.videoWidth;
-    canvas.height=video.videoHeight;
+    const rawWidth=video.videoWidth;
+    const rawHeight=video.videoHeight;
+    const maxDim=mode==="autosync" ? 720 : 512;
+    const longestSide=Math.max(rawWidth, rawHeight);
+    const scale=longestSide > maxDim ? (maxDim / longestSide) : 1;
+    canvas.width=Math.max(1, Math.round(rawWidth * scale));
+    canvas.height=Math.max(1, Math.round(rawHeight * scale));
     canvas.getContext("2d").drawImage(video,0,0);
-    return canvas.toDataURL("image/jpeg", 1.0);
+    return canvas.toDataURL("image/jpeg", 0.72);
 }
 
 function formatVehicleSummary(vehicleMap){
@@ -3267,7 +3272,7 @@ function analyzeScene(mode="autosync"){
     startAnalyzeSequence(mode);
 
     const payload={
-        image:captureFrameImage(video),
+        image:captureFrameImage(video, mode),
         mode: mode,
         lat:currentLat,
         lon:currentLon
