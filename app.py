@@ -29,6 +29,7 @@ app = Flask(__name__)
 CITY_LAT = 16.5062
 CITY_LON = 80.6480
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FIRESTORE_TIMEOUT_SEC = float(os.getenv("FIRESTORE_TIMEOUT_SEC", "8"))
 
 # Lightweight .env loader
 def load_local_env():
@@ -755,7 +756,7 @@ def cleanup_old_alerts():
     try:
         seven_days_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
         # Query posts older than 7 days
-        old_posts = db.collection('community_posts').where('created_at', '<', seven_days_ago).stream()
+        old_posts = db.collection('community_posts').where('created_at', '<', seven_days_ago).stream(timeout=FIRESTORE_TIMEOUT_SEC)
         
         for doc in old_posts:
             data = doc.to_dict()
@@ -781,30 +782,52 @@ def haversine_km(lat1, lon1, lat2, lon2):
 def fetch_posts_with_reactions():
     if not db:
         return []
-    docs = db.collection('community_posts').order_by('created_at', direction=firestore.Query.DESCENDING).limit(50).stream()
-    posts = []
-    for doc in docs:
-        data = doc.to_dict()
-        reactions_data = data.get('reactions', {})
-        avoid_count = sum(1 for r in reactions_data.values() if r == 'Avoid')
-        careful_count = sum(1 for r in reactions_data.values() if r == 'Careful')
-        safe_now_count = sum(1 for r in reactions_data.values() if r == 'Safe now')
-        
-        posts.append({
-            "id": doc.id,
-            "image_url": data.get("image_url"),
-            "lat": float(data.get("lat", 0)),
-            "lon": float(data.get("lon", 0)),
-            "tag": data.get("tag"),
-            "note": data.get("note", ""),
-            "created_at": data.get("created_at"),
-            "reactions": {
-                "Avoid": avoid_count,
-                "Careful": careful_count,
-                "Safe now": safe_now_count
-            }
-        })
-    return posts
+    try:
+        docs = db.collection('community_posts').order_by(
+            'created_at',
+            direction=firestore.Query.DESCENDING
+        ).limit(50).stream(timeout=FIRESTORE_TIMEOUT_SEC)
+        posts = []
+        for doc in docs:
+            data = doc.to_dict()
+            reactions_data = data.get('reactions', {})
+            avoid_count = sum(1 for r in reactions_data.values() if r == 'Avoid')
+            careful_count = sum(1 for r in reactions_data.values() if r == 'Careful')
+            safe_now_count = sum(1 for r in reactions_data.values() if r == 'Safe now')
+            
+            posts.append({
+                "id": doc.id,
+                "image_url": data.get("image_url"),
+                "lat": float(data.get("lat", 0)),
+                "lon": float(data.get("lon", 0)),
+                "tag": data.get("tag"),
+                "note": data.get("note", ""),
+                "created_at": data.get("created_at"),
+                "reactions": {
+                    "Avoid": avoid_count,
+                    "Careful": careful_count,
+                    "Safe now": safe_now_count
+                }
+            })
+        return posts
+    except Exception as e:
+        print(f"Community posts fetch error: {e}")
+        return []
+
+def count_fcm_users(max_docs=1000):
+    if not db:
+        return 0
+    try:
+        docs = db.collection("fcm_tokens").limit(max_docs + 1).stream(timeout=FIRESTORE_TIMEOUT_SEC)
+        count = 0
+        for _ in docs:
+            count += 1
+            if count > max_docs:
+                return f"{max_docs}+"
+        return count
+    except Exception as e:
+        print(f"FCM token count error: {e}")
+        return 0
 
 def compute_community_penalty(lat, lon):
     if lat is None or lon is None:
@@ -1095,7 +1118,10 @@ def admin_dashboard():
     
     if db:
         try:
-            f_docs = db.collection('app_feedback').order_by('created_at', direction=firestore.Query.DESCENDING).limit(100).stream()
+            f_docs = db.collection('app_feedback').order_by(
+                'created_at',
+                direction=firestore.Query.DESCENDING
+            ).limit(100).stream(timeout=FIRESTORE_TIMEOUT_SEC)
             total_stars = 0
             for doc in f_docs:
                 data = doc.to_dict()
@@ -1105,7 +1131,7 @@ def admin_dashboard():
             if feedbacks:
                 avg_rating = round(total_stars / len(feedbacks), 1)
 
-            user_count = sum(1 for _ in db.collection('fcm_tokens').stream())
+            user_count = count_fcm_users()
         except Exception as e:
             print(f"Admin fetch error: {e}")
 
