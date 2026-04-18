@@ -151,6 +151,8 @@ VEHICLE_CLASSES = {"bicycle", "bus", "car", "motorbike", "train"}
 _vehicle_net = None
 _vehicle_net_lock = threading.Lock()
 _hog_detector = None
+_face_cascades = None
+_face_cascades_lock = threading.Lock()
 _yolo_model = None
 _yolo_model_lock = threading.Lock()
 _yolo_disabled = False
@@ -249,6 +251,53 @@ def get_hog_people_detector():
         _hog_detector = cv2.HOGDescriptor()
         _hog_detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
     return _hog_detector
+
+def get_face_cascades():
+    global _face_cascades
+    if _face_cascades is not None:
+        return _face_cascades
+
+    with _face_cascades_lock:
+        if _face_cascades is None:
+            cascade_names = [
+                "haarcascade_frontalface_default.xml",
+                "haarcascade_frontalface_alt2.xml",
+                "haarcascade_profileface.xml"
+            ]
+            loaded = []
+            for cascade_name in cascade_names:
+                cascade_path = os.path.join(cv2.data.haarcascades, cascade_name)
+                cascade = cv2.CascadeClassifier(cascade_path)
+                if not cascade.empty():
+                    loaded.append((cascade_name, cascade))
+            _face_cascades = loaded
+    return _face_cascades
+
+def rect_iou(rect_a, rect_b):
+    ax, ay, aw, ah = rect_a
+    bx, by, bw, bh = rect_b
+    x1 = max(ax, bx)
+    y1 = max(ay, by)
+    x2 = min(ax + aw, bx + bw)
+    y2 = min(ay + ah, by + bh)
+
+    overlap_w = max(0, x2 - x1)
+    overlap_h = max(0, y2 - y1)
+    intersection = overlap_w * overlap_h
+    if intersection <= 0:
+        return 0.0
+
+    area_a = aw * ah
+    area_b = bw * bh
+    union = max(area_a + area_b - intersection, 1)
+    return intersection / union
+
+def dedupe_rectangles(rectangles, iou_threshold=0.35):
+    deduped = []
+    for rect in sorted(rectangles, key=lambda item: item[2] * item[3], reverse=True):
+        if all(rect_iou(rect, kept) < iou_threshold for kept in deduped):
+            deduped.append(rect)
+    return deduped
 
 def detect_lighting(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -538,17 +587,54 @@ def decode_data_url_image(image_data_url):
 
 def detect_faces_haar(image_bgr):
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-    cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
-    face_cascade = cv2.CascadeClassifier(cascade_path)
-    if face_cascade.empty():
+    gray = cv2.equalizeHist(gray)
+    cascades = get_face_cascades()
+    if not cascades:
         return []
-    faces = face_cascade.detectMultiScale(
-        gray,
-        scaleFactor=1.1,
-        minNeighbors=3,
-        minSize=(24, 24)
-    )
-    return faces
+
+    scale = 1.0
+    min_side = min(gray.shape[:2])
+    work_gray = gray
+    if min_side < 420:
+        scale = min(2.0, 420.0 / max(min_side, 1))
+        work_gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+
+    min_face = max(20, int(min(work_gray.shape[:2]) * 0.06))
+    detections = []
+    for cascade_name, cascade in cascades:
+        detected = cascade.detectMultiScale(
+            work_gray,
+            scaleFactor=1.05,
+            minNeighbors=4,
+            minSize=(min_face, min_face)
+        )
+        for (x, y, w, h) in detected:
+            detections.append((int(x), int(y), int(w), int(h)))
+
+        if "profileface" in cascade_name:
+            flipped_gray = cv2.flip(work_gray, 1)
+            flipped_detected = cascade.detectMultiScale(
+                flipped_gray,
+                scaleFactor=1.05,
+                minNeighbors=4,
+                minSize=(min_face, min_face)
+            )
+            frame_width = work_gray.shape[1]
+            for (x, y, w, h) in flipped_detected:
+                detections.append((int(frame_width - (x + w)), int(y), int(w), int(h)))
+
+    if scale != 1.0:
+        detections = [
+            (
+                int(round(x / scale)),
+                int(round(y / scale)),
+                int(round(w / scale)),
+                int(round(h / scale))
+            )
+            for (x, y, w, h) in detections
+        ]
+
+    return dedupe_rectangles(detections)
 
 def detect_document_like_image(image_bgr):
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
@@ -1211,8 +1297,9 @@ def analyze_scene():
         lighting, brightness = detect_lighting(processed_img)
         detector_used = "fallback"
         try:
-            use_fast_empty = mode != "mobile_detect"
-            enable_full_pass = mode == "autosync"
+            people_focused_mode = mode in {"crowd", "autosync", "mobile_detect"}
+            use_fast_empty = not people_focused_mode
+            enable_full_pass = people_focused_mode
             vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(
                 processed_img, brightness, allow_fast_empty=use_fast_empty, enable_full_pass=enable_full_pass
             )

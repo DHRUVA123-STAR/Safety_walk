@@ -1448,12 +1448,14 @@
             }
 
             .fs-capture-btn {
-                width: 88px;
+                min-width: 132px;
+                width: auto;
                 height: 60px;
+                padding: 0 18px;
                 background: linear-gradient(135deg, #2575fc 0%, #1fc3d6 100%);
                 color: #ffffff;
                 border-color: #dbeafe;
-                font-size: 17px;
+                font-size: 15px;
                 font-weight: 700;
             }
 
@@ -1485,6 +1487,59 @@
 
             body.camera-fullscreen-mode .mobile-cam-subtitle.is-thinking {
                 animation: subtitlePulse 1.15s ease-in-out infinite alternate;
+            }
+
+            .mobile-cam-mode-bar {
+                display: none;
+            }
+
+            body.camera-fullscreen-mode .mobile-cam-mode-bar {
+                display: flex;
+                position: fixed;
+                left: 14px;
+                right: 14px;
+                bottom: 158px;
+                z-index: 1210;
+                gap: 8px;
+                justify-content: center;
+            }
+
+            .mobile-cam-mode-btn {
+                flex: 1 1 0;
+                min-width: 0;
+                border-radius: 999px;
+                border: 1px solid rgba(255,255,255,0.26);
+                background: rgba(0,0,0,0.42);
+                color: #f8fafc;
+                padding: 10px 12px;
+                font-size: 0.82rem;
+                font-weight: 700;
+                letter-spacing: 0.01em;
+                backdrop-filter: blur(6px);
+            }
+
+            .mobile-cam-mode-btn.active {
+                background: linear-gradient(135deg, rgba(37,117,252,0.96) 0%, rgba(31,195,214,0.96) 100%);
+                border-color: rgba(255,255,255,0.58);
+                color: #ffffff;
+                box-shadow: 0 10px 24px rgba(37,117,252,0.28);
+            }
+
+            body.camera-fullscreen-mode.capture-only .mobile-cam-mode-bar {
+                display: none;
+            }
+
+            body.camera-fullscreen-mode .mobile-center-score.show {
+                display: block;
+                top: 17%;
+                left: 50%;
+                transform: translate(-50%, 0);
+                z-index: 1211;
+                width: min(88vw, 320px);
+                padding: 14px 16px;
+                border-radius: 16px;
+                background: rgba(6, 10, 18, 0.9);
+                backdrop-filter: blur(8px);
             }
 
             .dark-mode .mobile-top-btn,
@@ -1961,6 +2016,11 @@
 
 <video id="mobileFullscreenVideo" autoplay playsinline></video>
 <div id="mobileCamSubtitle" class="mobile-cam-subtitle"></div>
+<div class="mobile-cam-mode-bar" id="mobileCamModeBar">
+    <button type="button" class="mobile-cam-mode-btn active" id="mobileModeVehicle" onclick="setMobileAnalyzeMode('vehicle')">Vehicle</button>
+    <button type="button" class="mobile-cam-mode-btn" id="mobileModeCrowd" onclick="setMobileAnalyzeMode('crowd')">Crowd</button>
+    <button type="button" class="mobile-cam-mode-btn" id="mobileModeAutoSync" onclick="setMobileAnalyzeMode('autosync')">Auto Sync</button>
+</div>
 <div class="mobile-capture-preview" id="mobileCapturePreview">
     <img id="mobileCaptureImage" alt="Captured preview">
     <div class="mobile-capture-actions">
@@ -2041,6 +2101,7 @@ let availableVideoInputs=[];
 let activeVideoInputIndex=-1;
 let mobileFacingMode="environment";
 let mobileCameraMode="analyze";
+let mobileAnalyzeMode="vehicle";
 let mobileCapturedImageData=null;
 let selectedAlertFile=null; // Stores the file chosen from native camera/gallery
 const userToken = 'guest-' + Math.random().toString(36).substr(2, 9);
@@ -3260,13 +3321,20 @@ function captureFrameImage(video, mode="autosync"){
     const canvas=document.createElement("canvas");
     const rawWidth=video.videoWidth;
     const rawHeight=video.videoHeight;
-    const maxDim=mode==="autosync" ? 480 : 320;
+    const captureProfiles={
+        autosync:{maxDim:640, quality:0.82},
+        crowd:{maxDim:640, quality:0.85},
+        mobile_detect:{maxDim:640, quality:0.85},
+        vehicle:{maxDim:480, quality:0.72}
+    };
+    const profile=captureProfiles[mode] || {maxDim:520, quality:0.78};
+    const maxDim=profile.maxDim;
     const longestSide=Math.max(rawWidth, rawHeight);
     const scale=longestSide > maxDim ? (maxDim / longestSide) : 1;
     canvas.width=Math.max(1, Math.round(rawWidth * scale));
     canvas.height=Math.max(1, Math.round(rawHeight * scale));
     canvas.getContext("2d").drawImage(video,0,0);
-    return canvas.toDataURL("image/jpeg", 0.60);
+    return canvas.toDataURL("image/jpeg", profile.quality);
 }
 
 function formatVehicleSummary(vehicleMap){
@@ -3322,6 +3390,7 @@ function analyzeScene(mode="autosync"){
                 : ` traffic API unavailable, fallback camera traffic: ${data.camera_traffic}.`;
         }
         const warningMsg=data.low_light_warning ? ` ${data.low_light_warning}` : "";
+        const faceSummary=data.face_count > 0 ? ` Faces detected: ${data.face_count}.` : "";
 
         if(mode==="vehicle"){
             setCameraStatus(`Vehicle detected: ${data.vehicle_count}. Types: ${vehicleSummary}.${warningMsg}`,"success");
@@ -3332,7 +3401,7 @@ function analyzeScene(mode="autosync"){
             return;
         }
         if(mode==="crowd"){
-            setCameraStatus(`Crowd detected: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${warningMsg}`,"success");
+            setCameraStatus(`Crowd detected: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${faceSummary}${warningMsg}`,"success");
             let msgCrowd = `Crowd analysis complete. Crowd is ${data.crowd}.`;
             if (currentVoiceLang === "te") msgCrowd = `Crowd analysis పూర్తయింది. Crowd ${data.crowd} గా ఉంది.`;
             if (currentVoiceLang === "hi") msgCrowd = `Crowd analysis पूरा हुआ। Crowd ${data.crowd} है।`;
@@ -3341,7 +3410,7 @@ function analyzeScene(mode="autosync"){
         }
         if(mode==="mobile_detect"){
             setCameraStatus(
-                `Detected vehicles: ${data.vehicle_count} (${vehicleSummary}). Crowd: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${warningMsg}`,
+                `Detected vehicles: ${data.vehicle_count} (${vehicleSummary}). Crowd: ${data.crowd_count} people (${data.crowd}). Lighting: ${data.lighting}.${faceSummary}${warningMsg}`,
                 "success"
             );
             let msgDetect = `Detection complete. Vehicles ${data.vehicle_count}. People ${data.crowd_count}. Crowd is ${data.crowd}.`;
@@ -3351,11 +3420,15 @@ function analyzeScene(mode="autosync"){
             return;
         }
 
-        setCameraStatus(`Auto Sync complete: Vehicles ${data.vehicle_count}, Crowd ${data.crowd}, Lighting ${data.lighting}, Traffic ${data.traffic}.${apiMsg}${warningMsg}`,"success");
+        setCameraStatus(`Auto Sync complete: Vehicles ${data.vehicle_count}, Crowd ${data.crowd}, Lighting ${data.lighting}, Traffic ${data.traffic}.${faceSummary}${apiMsg}${warningMsg}`,"success");
         calculateSafety()
         .then((scoreData)=>{
-            stopCamera();
-            setCameraStatus(`Auto Sync complete. Safety Level: ${scoreData.safety_level}, Score: ${scoreData.score}.`,"success");
+            if(document.body.classList.contains("camera-fullscreen-mode")){
+                showMobileScoreCenter(scoreData.safety_level, scoreData.score, 4200);
+            }
+            const note=document.getElementById("mobileStageNote");
+            if(note) note.innerText=`Safety Level: ${scoreData.safety_level} | Score: ${scoreData.score}`;
+            setCameraStatus(`Auto Sync complete. Safety Level: ${scoreData.safety_level}, Score: ${scoreData.score}. Camera stays open for another check.`,"success");
             speakSafetySummary(currentVoiceLang, scoreData.safety_level, scoreData.score);
         })
         .catch(()=>{
@@ -3392,6 +3465,7 @@ async function requestNotificationPermission() {
 // ==================== MAIN INIT + VOICE START ====================
 window.addEventListener("load", function(){
     initVoices();
+    syncMobileAnalyzeModeUI();
     updateMobileSnapshot();
     renderMobileHistory();
     refreshMobileLanguageHint();
@@ -3614,11 +3688,55 @@ function cancelCommunityPost(){
     setCommunityStatus("");
 }
 
+function getMobileAnalyzeButtonLabel(mode){
+    if(mode==="vehicle") return "Detect Vehicles";
+    if(mode==="crowd") return "Detect Crowd";
+    if(mode==="autosync") return "Run Auto Sync";
+    return "Analyze";
+}
+
+function getMobileAnalyzeModePrompt(mode){
+    if(mode==="vehicle") return "Vehicle mode: point at the road and keep cars, bikes, or buses in view.";
+    if(mode==="crowd") return "Crowd mode: keep faces or nearby people visible for better people detection.";
+    if(mode==="autosync") return "Auto Sync: capture the road scene to combine vehicles, crowd, lighting, and score.";
+    return "Camera analysis ready.";
+}
+
+function syncMobileAnalyzeModeUI(){
+    const modeIds={
+        vehicle:"mobileModeVehicle",
+        crowd:"mobileModeCrowd",
+        autosync:"mobileModeAutoSync"
+    };
+    Object.entries(modeIds).forEach(([mode,id])=>{
+        const btn=document.getElementById(id);
+        if(btn) btn.classList.toggle("active", mobileAnalyzeMode===mode);
+    });
+
+    const primaryBtn=document.getElementById("mobilePrimaryCamBtn");
+    if(primaryBtn && mobileCameraMode!=="capture"){
+        primaryBtn.innerText=getMobileAnalyzeButtonLabel(mobileAnalyzeMode);
+    }
+}
+
+function setMobileAnalyzeMode(mode, announce=true){
+    mobileAnalyzeMode=mode;
+    syncMobileAnalyzeModeUI();
+    if(announce && mobileCameraMode!=="capture" && document.body.classList.contains("camera-fullscreen-mode")){
+        setCameraStatus(getMobileAnalyzeModePrompt(mode),"success");
+    }
+}
+
 function setMobileCameraMode(mode){
     mobileCameraMode=mode;
+    document.body.classList.toggle("capture-only", mode === "capture");
     const btn=document.getElementById("mobilePrimaryCamBtn");
     if(!btn) return;
-    btn.innerText = mode === "capture" ? "Capture" : "Analyze";
+    if(mode === "capture"){
+        btn.innerText = "Capture";
+        return;
+    }
+    syncMobileAnalyzeModeUI();
 }
 
 function quickUploadPhoto(){
@@ -3626,14 +3744,14 @@ function quickUploadPhoto(){
     document.getElementById("communityImageInput").click();
 }
 
-function showMobileScoreCenter(level, score){
+function showMobileScoreCenter(level, score, durationMs=2500){
     const box=document.getElementById("mobileCenterScore");
     if(!box) return;
     document.getElementById("mobileScoreLevel").innerText=`Safety Level: ${level}`;
     document.getElementById("mobileScoreValue").innerText=`Score: ${score}`;
     box.classList.add("show");
     if(mobileScoreTimer) clearTimeout(mobileScoreTimer);
-    mobileScoreTimer=setTimeout(()=>box.classList.remove("show"),2500);
+    mobileScoreTimer=setTimeout(()=>box.classList.remove("show"),durationMs);
 }
 
 function quickCheckSafety(){
@@ -3683,6 +3801,10 @@ async function openLiveCameraFullscreen(mode="analyze"){
         fsVideo.play().catch(()=>{});
     }
     document.body.classList.add("camera-fullscreen-mode");
+    if(mode==="analyze"){
+        setMobileAnalyzeMode(mobileAnalyzeMode, false);
+        setCameraStatus(getMobileAnalyzeModePrompt(mobileAnalyzeMode),"success");
+    }
 }
 
 async function openAnalyzeCameraFullscreen(){
@@ -3695,6 +3817,9 @@ async function openCaptureCameraFullscreen(){
 
 function closeLiveCameraFullscreen(){
     document.body.classList.remove("camera-fullscreen-mode");
+    document.body.classList.remove("capture-only");
+    const scoreBox=document.getElementById("mobileCenterScore");
+    if(scoreBox) scoreBox.classList.remove("show");
     stopCamera();
 }
 
@@ -3729,7 +3854,7 @@ function mobilePrimaryCameraAction(){
         speakTextInLanguage(currentVoiceLang, msgCapture);
         return;
     }
-    analyzeScene("mobile_detect");
+    analyzeScene(mobileAnalyzeMode);
 }
 
 function retakeCapturedPhoto(){
@@ -3993,6 +4118,7 @@ function stopCamera(){
     const closeCameraBtn=document.getElementById("closeCameraBtn");
     const cameraPanel=document.getElementById("cameraPanel");
     document.body.classList.remove("camera-fullscreen-mode");
+    document.body.classList.remove("capture-only");
     closeMobileSheets();
 
     video.style.display="none";
@@ -4013,6 +4139,10 @@ function stopCamera(){
     const preview=document.getElementById("mobileCapturePreview");
     if(preview){
         preview.classList.remove("show");
+    }
+    const scoreBox=document.getElementById("mobileCenterScore");
+    if(scoreBox){
+        scoreBox.classList.remove("show");
     }
 }
 </script>
