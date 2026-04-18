@@ -3038,13 +3038,14 @@ async function submitAppFeedback() {
                 user_token: userToken
             })
         });
+        const data = await res.json().catch(() => ({}));
 
-        if (res.ok) {
-            setCommunityStatus("Thank you! Your feedback has been sent.");
+        if (res.ok && data.ok) {
+            setCommunityStatus(data.message || "Thank you! Your feedback has been sent.");
             closeFeedbackModal();
             document.getElementById('feedbackComment').value = '';
         } else {
-            setCommunityStatus("Failed to send feedback. Try again.", true);
+            setCommunityStatus(data.message || "Failed to send feedback. Try again.", true);
         }
     } catch (err) {
         setCommunityStatus("Network error. Please check connection.", true);

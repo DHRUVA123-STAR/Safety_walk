@@ -12,6 +12,8 @@ import threading
 import ssl
 import certifi
 import uuid
+import smtplib
+from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 import cloudinary
 import cloudinary.uploader
@@ -48,6 +50,62 @@ def load_local_env():
                 os.environ[key] = value
 
 load_local_env()
+
+# Feedback Gmail account
+# For Railway deploys, set these in Railway Variables.
+FEEDBACK_GMAIL_ADDRESS = os.getenv("FEEDBACK_GMAIL_ADDRESS", "").strip()
+FEEDBACK_GMAIL_APP_PASSWORD = os.getenv("FEEDBACK_GMAIL_APP_PASSWORD", "")
+
+def get_feedback_email_config_errors():
+    missing = []
+    if not FEEDBACK_GMAIL_ADDRESS:
+        missing.append("FEEDBACK_GMAIL_ADDRESS")
+    if not FEEDBACK_GMAIL_APP_PASSWORD:
+        missing.append("FEEDBACK_GMAIL_APP_PASSWORD")
+    return missing
+
+def send_feedback_email(feedback_record):
+    missing = get_feedback_email_config_errors()
+    if missing:
+        raise RuntimeError(
+            "Feedback email is not configured. Missing Railway variables: " + ", ".join(missing)
+        )
+
+    message = EmailMessage()
+    message["Subject"] = (
+        f"Community Safety App Feedback - {feedback_record['rating']}/5"
+    )
+    message["From"] = FEEDBACK_GMAIL_ADDRESS
+    message["To"] = FEEDBACK_GMAIL_ADDRESS
+    message["Reply-To"] = FEEDBACK_GMAIL_ADDRESS
+
+    submitted_at = feedback_record["created_at"]
+    comment = feedback_record["comment"] or "(No comment provided)"
+    remote_ip = feedback_record.get("remote_ip") or "Unknown"
+    user_agent = feedback_record.get("user_agent") or "Unknown"
+    message.set_content(
+        "\n".join(
+            [
+                "A new feedback submission was received.",
+                "",
+                f"Rating: {feedback_record['rating']}/5",
+                f"Comment: {comment}",
+                f"User Token: {feedback_record['user_token']}",
+                f"Submitted At (UTC): {submitted_at}",
+                f"Remote IP: {remote_ip}",
+                f"User Agent: {user_agent}",
+            ]
+        )
+    )
+
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as smtp:
+        smtp.ehlo()
+        smtp.starttls(context=ssl_context)
+        smtp.ehlo()
+        smtp.login(FEEDBACK_GMAIL_ADDRESS, FEEDBACK_GMAIL_APP_PASSWORD)
+        smtp.send_message(message)
 
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
@@ -1102,15 +1160,34 @@ def submit_app_feedback():
     if not isinstance(rating, int) or rating < 1 or rating > 5 or not user_token:
         return jsonify({"ok": False, "message": "rating (1-5) and user_token required"}), 400
 
-    if db:
-        db.collection('app_feedback').add({
-            'user_token': user_token,
-            'rating': rating,
-            'comment': comment,
-            'created_at': datetime.utcnow().isoformat()
-        })
+    feedback_record = {
+        'user_token': user_token,
+        'rating': rating,
+        'comment': comment,
+        'created_at': datetime.utcnow().isoformat(),
+        'remote_ip': request.headers.get("X-Forwarded-For", request.remote_addr),
+        'user_agent': request.headers.get("User-Agent", "")
+    }
 
-    return jsonify({"ok": True, "message": "Feedback received. Thank you!"})
+    if db:
+        try:
+            db.collection('app_feedback').add(feedback_record)
+        except Exception:
+            app.logger.exception("Failed to store feedback in Firestore.")
+
+    try:
+        send_feedback_email(feedback_record)
+    except RuntimeError as exc:
+        app.logger.warning(str(exc))
+        return jsonify({"ok": False, "message": str(exc)}), 503
+    except Exception:
+        app.logger.exception("Failed to send feedback email.")
+        return jsonify({
+            "ok": False,
+            "message": "Feedback was saved, but the Gmail notification email could not be sent. Please verify the Gmail settings."
+        }), 503
+
+    return jsonify({"ok": True, "message": "Feedback received and emailed successfully. Thank you!"})
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1204,4 +1281,4 @@ def analyze_lighting():
 
 if __name__ == "__main__":
     log_service_status()
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
