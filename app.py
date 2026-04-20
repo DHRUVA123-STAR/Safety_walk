@@ -1256,25 +1256,33 @@ def submit_app_feedback():
         'user_agent': request.headers.get("User-Agent", "")
     }
 
+    feedback_saved = False
     if db:
         try:
             db.collection('app_feedback').add(feedback_record)
+            feedback_saved = True
         except Exception:
             app.logger.exception("Failed to store feedback in Firestore.")
+            return jsonify({"ok": False, "message": "Failed to save feedback. Please try again."}), 503
 
+    # Try to send email, but don't fail if it doesn't work
+    email_sent = False
     try:
         send_feedback_email(feedback_record)
+        email_sent = True
     except RuntimeError as exc:
-        app.logger.warning(str(exc))
-        return jsonify({"ok": False, "message": str(exc)}), 503
-    except Exception:
+        app.logger.warning(f"Feedback email not sent (missing config): {str(exc)}")
+    except Exception as exc:
         app.logger.exception("Failed to send feedback email.")
-        return jsonify({
-            "ok": False,
-            "message": "Feedback was saved, but the Gmail notification email could not be sent. Please verify the Gmail settings."
-        }), 503
 
-    return jsonify({"ok": True, "message": "Feedback received and emailed successfully. Thank you!"})
+    # Always return success if feedback was saved to database
+    if feedback_saved:
+        message = "✅ Your feedback is successfully submitted! Thank you for helping us improve."
+        if not email_sent:
+            message += " (Note: Confirmation email could not be sent, but your feedback was saved.)"
+        return jsonify({"ok": True, "message": message})
+    
+    return jsonify({"ok": False, "message": "Failed to save feedback. Please try again."}), 503
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
