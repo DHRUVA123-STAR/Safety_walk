@@ -65,47 +65,59 @@ def get_feedback_email_config_errors():
     return missing
 
 def send_feedback_email(feedback_record):
-    missing = get_feedback_email_config_errors()
-    if missing:
-        raise RuntimeError(
-            "Feedback email is not configured. Missing Railway variables: " + ", ".join(missing)
+    """Send feedback email - called in background thread"""
+    try:
+        missing = get_feedback_email_config_errors()
+        if missing:
+            app.logger.warning(f"Gmail not configured. Missing: {', '.join(missing)}")
+            return False
+
+        message = EmailMessage()
+        message["Subject"] = (
+            f"Community Safety App Feedback - {feedback_record['rating']}/5"
+        )
+        message["From"] = FEEDBACK_GMAIL_ADDRESS
+        message["To"] = FEEDBACK_GMAIL_ADDRESS
+        message["Reply-To"] = FEEDBACK_GMAIL_ADDRESS
+
+        submitted_at = feedback_record["created_at"]
+        comment = feedback_record["comment"] or "(No comment provided)"
+        remote_ip = feedback_record.get("remote_ip") or "Unknown"
+        user_agent = feedback_record.get("user_agent") or "Unknown"
+        message.set_content(
+            "\n".join(
+                [
+                    "A new feedback submission was received.",
+                    "",
+                    f"Rating: {feedback_record['rating']}/5",
+                    f"Comment: {comment}",
+                    f"User Token: {feedback_record['user_token']}",
+                    f"Submitted At (UTC): {submitted_at}",
+                    f"Remote IP: {remote_ip}",
+                    f"User Agent: {user_agent}",
+                ]
+            )
         )
 
-    message = EmailMessage()
-    message["Subject"] = (
-        f"Community Safety App Feedback - {feedback_record['rating']}/5"
-    )
-    message["From"] = FEEDBACK_GMAIL_ADDRESS
-    message["To"] = FEEDBACK_GMAIL_ADDRESS
-    message["Reply-To"] = FEEDBACK_GMAIL_ADDRESS
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-    submitted_at = feedback_record["created_at"]
-    comment = feedback_record["comment"] or "(No comment provided)"
-    remote_ip = feedback_record.get("remote_ip") or "Unknown"
-    user_agent = feedback_record.get("user_agent") or "Unknown"
-    message.set_content(
-        "\n".join(
-            [
-                "A new feedback submission was received.",
-                "",
-                f"Rating: {feedback_record['rating']}/5",
-                f"Comment: {comment}",
-                f"User Token: {feedback_record['user_token']}",
-                f"Submitted At (UTC): {submitted_at}",
-                f"Remote IP: {remote_ip}",
-                f"User Agent: {user_agent}",
-            ]
-        )
-    )
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=ssl_context)
+            smtp.ehlo()
+            smtp.login(FEEDBACK_GMAIL_ADDRESS, FEEDBACK_GMAIL_APP_PASSWORD)
+            smtp.send_message(message)
+        
+        app.logger.info(f"Feedback email sent successfully to {FEEDBACK_GMAIL_ADDRESS}")
+        return True
+    except Exception as exc:
+        app.logger.exception(f"Failed to send feedback email: {str(exc)}")
+        return False
 
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
-
-    with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as smtp:
-        smtp.ehlo()
-        smtp.starttls(context=ssl_context)
-        smtp.ehlo()
-        smtp.login(FEEDBACK_GMAIL_ADDRESS, FEEDBACK_GMAIL_APP_PASSWORD)
-        smtp.send_message(message)
+def send_email_async(feedback_record):
+    """Send feedback email in background thread (non-blocking)"""
+    thread = threading.Thread(target=send_feedback_email, args=(feedback_record,), daemon=True)
+    thread.start()
 
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
@@ -1256,33 +1268,25 @@ def submit_app_feedback():
         'user_agent': request.headers.get("User-Agent", "")
     }
 
-    feedback_saved = False
+    # Save to database
     if db:
         try:
             db.collection('app_feedback').add(feedback_record)
-            feedback_saved = True
-        except Exception:
+        except Exception as exc:
             app.logger.exception("Failed to store feedback in Firestore.")
             return jsonify({"ok": False, "message": "Failed to save feedback. Please try again."}), 503
+    else:
+        app.logger.warning("Firestore DB not available - feedback not saved")
+        return jsonify({"ok": False, "message": "Database error. Please try again."}), 503
 
-    # Try to send email, but don't fail if it doesn't work
-    email_sent = False
-    try:
-        send_feedback_email(feedback_record)
-        email_sent = True
-    except RuntimeError as exc:
-        app.logger.warning(f"Feedback email not sent (missing config): {str(exc)}")
-    except Exception as exc:
-        app.logger.exception("Failed to send feedback email.")
-
-    # Always return success if feedback was saved to database
-    if feedback_saved:
-        message = "✅ Your feedback is successfully submitted! Thank you for helping us improve."
-        if not email_sent:
-            message += " (Note: Confirmation email could not be sent, but your feedback was saved.)"
-        return jsonify({"ok": True, "message": message})
+    # Send email in background (non-blocking) - returns immediately to user
+    send_email_async(feedback_record)
     
-    return jsonify({"ok": False, "message": "Failed to save feedback. Please try again."}), 503
+    # Return success immediately after database save
+    return jsonify({
+        "ok": True, 
+        "message": "✅ Your feedback is successfully submitted! Thank you for helping us improve."
+    })
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
