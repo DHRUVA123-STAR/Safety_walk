@@ -101,7 +101,7 @@ def send_feedback_email(feedback_record):
 
         ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=5) as smtp:
             smtp.ehlo()
             smtp.starttls(context=ssl_context)
             smtp.ehlo()
@@ -113,6 +113,11 @@ def send_feedback_email(feedback_record):
     except Exception as exc:
         app.logger.exception(f"Failed to send feedback email: {str(exc)}")
         return False
+
+
+def send_feedback_email_background(feedback_record):
+    thread = threading.Thread(target=send_feedback_email, args=(feedback_record,), daemon=True)
+    thread.start()
 
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
@@ -1274,15 +1279,12 @@ def submit_app_feedback():
         app.logger.warning("Firestore DB not available - feedback not saved")
         return jsonify({"ok": False, "message": "Database error. Please try again."}), 503
 
-    # Send email synchronously to guarantee delivery before returning success
-    email_sent = send_feedback_email(feedback_record)
-    if email_sent:
-        return jsonify({
-            "ok": True, 
-            "message": "✅ Your feedback is successfully submitted! Thank you for helping us improve."
-        })
-    else:
-        return jsonify({"ok": False, "message": "Failed to send email notification. Please check your Gmail configuration."}), 500
+    # Send email in background so submission returns immediately
+    send_feedback_email_background(feedback_record)
+    return jsonify({
+        "ok": True,
+        "message": "✅ Your feedback is successfully submitted! An email notification is being sent now."
+    })
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
