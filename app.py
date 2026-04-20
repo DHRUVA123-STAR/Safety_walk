@@ -114,11 +114,6 @@ def send_feedback_email(feedback_record):
         app.logger.exception(f"Failed to send feedback email: {str(exc)}")
         return False
 
-def send_email_async(feedback_record):
-    """Send feedback email in background thread (non-blocking)"""
-    thread = threading.Thread(target=send_feedback_email, args=(feedback_record,), daemon=True)
-    thread.start()
-
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
 CAFFE_MODEL_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.caffemodel")
@@ -1279,14 +1274,15 @@ def submit_app_feedback():
         app.logger.warning("Firestore DB not available - feedback not saved")
         return jsonify({"ok": False, "message": "Database error. Please try again."}), 503
 
-    # Send email in background (non-blocking) - returns immediately to user
-    send_email_async(feedback_record)
-    
-    # Return success immediately after database save
-    return jsonify({
-        "ok": True, 
-        "message": "✅ Your feedback is successfully submitted! Thank you for helping us improve."
-    })
+    # Send email synchronously to guarantee delivery before returning success
+    email_sent = send_feedback_email(feedback_record)
+    if email_sent:
+        return jsonify({
+            "ok": True, 
+            "message": "✅ Your feedback is successfully submitted! Thank you for helping us improve."
+        })
+    else:
+        return jsonify({"ok": False, "message": "Failed to send email notification. Please check your Gmail configuration."}), 500
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

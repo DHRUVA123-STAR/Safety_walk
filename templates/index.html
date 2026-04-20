@@ -1116,6 +1116,15 @@
                 justify-content: space-between;
                 margin-bottom: 10px;
                 color: #e2e8f0;
+                position: relative;
+                z-index: 1161;
+                pointer-events: auto;
+            }
+            
+            .mobile-menu-head div {
+                display: flex;
+                gap: 8px;
+                pointer-events: auto;
             }
 
             .mobile-menu-close {
@@ -1127,19 +1136,27 @@
                 color: #fff;
                 font-size: 20px;
                 cursor: pointer;
-                pointer-events: auto;
+                pointer-events: auto !important;
                 padding: 0;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
                 transition: all 0.2s ease;
+                -webkit-user-select: none;
+                user-select: none;
+                touch-action: manipulation;
+                -webkit-touch-callout: none;
             }
             
             .mobile-menu-close:active,
             .mobile-menu-close:hover {
                 background: rgba(255,255,255,0.15);
                 border-color: rgba(255,255,255,0.35);
+            }
+            
+            .mobile-menu-close:active {
+                transform: scale(0.95);
             }
 
             .mobile-community-card {
@@ -1977,7 +1994,7 @@
         <strong>Community Alerts</strong>
         <div style="display:flex; gap:8px;">
             <button type="button" class="mobile-menu-close" onclick="deleteAllCommunityPosts()" title="Delete all alerts">🗑</button>
-            <button type="button" class="mobile-menu-close" onclick="toggleCommunitySheet()">×</button>
+            <button type="button" class="mobile-menu-close" onclick="closeCommunitySheet(); return false;" style="z-index: 9999;">×</button>
         </div>
     </div>
     
@@ -3564,6 +3581,22 @@ window.addEventListener("load", function(){
         });
     });
 
+    // Setup touch handlers for mobile community sheet close button
+    const communityCloseBtn = document.querySelector(".mobile-community-sheet .mobile-menu-head button:last-child");
+    if (communityCloseBtn) {
+        communityCloseBtn.addEventListener("touchstart", function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            this.style.background = "rgba(255,255,255,0.15)";
+        }, { passive: false });
+        communityCloseBtn.addEventListener("touchend", function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            this.style.background = "rgba(255,255,255,0.08)";
+            closeCommunitySheet();
+        }, { passive: false });
+    }
+
     ["area","lighting","traffic","crowd"].forEach((id)=>{
         const el=document.getElementById(id);
         if(el){
@@ -3700,13 +3733,40 @@ window.addEventListener("resize", ()=>{
 });
 
 function toggleCommunitySheet(){
+    const sheet = document.getElementById("mobileCommunitySheet");
+    const overlay = document.getElementById("mobileMenuOverlay");
+    
+    if (!sheet) {
+        console.warn("Community sheet not found");
+        return;
+    }
+    
+    const isOpen = sheet.classList.contains("show");
+    
+    // Close all other sheets first
     closeMobileSheets();
-    const sheet=document.getElementById("mobileCommunitySheet");
-    const overlay=document.getElementById("mobileMenuOverlay");
-    sheet.classList.toggle("show");
-    if(overlay) overlay.classList.toggle("show");
-    if(sheet.classList.contains("show")){
+    
+    // If sheet was closed, open it
+    if (!isOpen) {
+        sheet.classList.add("show");
+        if (overlay) overlay.classList.add("show");
         loadCommunityPosts();
+    } else {
+        // Sheet was already open, just keep it closed
+        sheet.classList.remove("show");
+        if (overlay) overlay.classList.remove("show");
+    }
+}
+
+function closeCommunitySheet() {
+    const sheet = document.getElementById("mobileCommunitySheet");
+    const overlay = document.getElementById("mobileMenuOverlay");
+    
+    if (sheet) {
+        sheet.classList.remove("show");
+    }
+    if (overlay) {
+        overlay.classList.remove("show");
     }
 }
 
