@@ -65,12 +65,14 @@ def get_feedback_email_config_errors():
     return missing
 
 def send_feedback_email(feedback_record):
-    """Send feedback email - called in background thread"""
+    """Send feedback email with detailed logging"""
     try:
         missing = get_feedback_email_config_errors()
         if missing:
-            app.logger.warning(f"Gmail not configured. Missing: {', '.join(missing)}")
+            app.logger.error(f"Gmail not configured. Missing: {', '.join(missing)}")
             return False
+
+        app.logger.info(f"Attempting to send feedback email to {FEEDBACK_GMAIL_ADDRESS}")
 
         message = EmailMessage()
         message["Subject"] = (
@@ -99,19 +101,36 @@ def send_feedback_email(feedback_record):
             )
         )
 
+        app.logger.info("Connecting to Gmail SMTP...")
         ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=5) as smtp:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
+            app.logger.info("SMTP connection established")
             smtp.ehlo()
+            app.logger.info("EHLO sent")
+
             smtp.starttls(context=ssl_context)
+            app.logger.info("STARTTLS completed")
+
             smtp.ehlo()
+            app.logger.info("Second EHLO sent")
+
+            app.logger.info(f"Attempting login for {FEEDBACK_GMAIL_ADDRESS}")
             smtp.login(FEEDBACK_GMAIL_ADDRESS, FEEDBACK_GMAIL_APP_PASSWORD)
+            app.logger.info("Login successful")
+
             smtp.send_message(message)
-        
-        app.logger.info(f"Feedback email sent successfully to {FEEDBACK_GMAIL_ADDRESS}")
+            app.logger.info("Email sent successfully!")
+
         return True
+    except smtplib.SMTPAuthenticationError as exc:
+        app.logger.error(f"Gmail authentication failed: {str(exc)}")
+        return False
+    except smtplib.SMTPConnectError as exc:
+        app.logger.error(f"Gmail connection failed: {str(exc)}")
+        return False
     except Exception as exc:
-        app.logger.exception(f"Failed to send feedback email: {str(exc)}")
+        app.logger.exception(f"Unexpected error sending feedback email: {str(exc)}")
         return False
 
 
@@ -1279,12 +1298,59 @@ def submit_app_feedback():
         app.logger.warning("Firestore DB not available - feedback not saved")
         return jsonify({"ok": False, "message": "Database error. Please try again."}), 503
 
-    # Send email in background so submission returns immediately
-    send_feedback_email_background(feedback_record)
+    # Send email synchronously first to test, then make background
+    email_sent = send_feedback_email(feedback_record)
+    if not email_sent:
+        app.logger.warning("Email sending failed, but feedback was saved")
+        return jsonify({
+            "ok": True,
+            "message": "✅ Your feedback is successfully submitted! (Note: Email notification failed to send)"
+        })
+
     return jsonify({
         "ok": True,
-        "message": "✅ Your feedback is successfully submitted! An email notification is being sent now."
+        "message": "✅ Your feedback is successfully submitted! An email notification has been sent."
     })
+
+@app.route("/test-gmail", methods=["GET"])
+def test_gmail_connection():
+    """Test Gmail SMTP connection and credentials"""
+    try:
+        missing = get_feedback_email_config_errors()
+        if missing:
+            return jsonify({
+                "ok": False,
+                "message": f"Gmail not configured. Missing: {', '.join(missing)}"
+            }), 503
+
+        app.logger.info("Testing Gmail connection...")
+
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=ssl_context)
+            smtp.ehlo()
+            smtp.login(FEEDBACK_GMAIL_ADDRESS, FEEDBACK_GMAIL_APP_PASSWORD)
+
+        app.logger.info("Gmail test successful!")
+        return jsonify({
+            "ok": True,
+            "message": "✅ Gmail connection successful! Emails should work."
+        })
+
+    except smtplib.SMTPAuthenticationError as exc:
+        app.logger.error(f"Gmail auth failed: {str(exc)}")
+        return jsonify({
+            "ok": False,
+            "message": f"❌ Gmail authentication failed: {str(exc)}. Check your app password."
+        }), 500
+    except Exception as exc:
+        app.logger.exception(f"Gmail test failed: {str(exc)}")
+        return jsonify({
+            "ok": False,
+            "message": f"❌ Gmail connection failed: {str(exc)}"
+        }), 500
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
