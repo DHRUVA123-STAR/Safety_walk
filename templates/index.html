@@ -1126,6 +1126,20 @@
                 background: rgba(255,255,255,0.08);
                 color: #fff;
                 font-size: 20px;
+                cursor: pointer;
+                pointer-events: auto;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                transition: all 0.2s ease;
+            }
+            
+            .mobile-menu-close:active,
+            .mobile-menu-close:hover {
+                background: rgba(255,255,255,0.15);
+                border-color: rgba(255,255,255,0.35);
             }
 
             .mobile-community-card {
@@ -2040,24 +2054,28 @@
 <!-- Feedback Modal -->
 <div id="feedbackModal" onclick="if(event.target === this) closeFeedbackModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
     <div class="feedback-modal-content" style="padding:24px; border-radius:16px; width:90%; max-width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
-        <h3 style="margin:0 0 16px;">Your Feedback Matters</h3>
+        <h3 style="margin:0 0 16px;" id="feedbackTitle">Your Feedback Matters</h3>
         
-        <label style="display:block; margin-bottom:8px; font-weight:500;">Rating (1–5)</label>
-        <select id="feedbackRating" style="width:100%; padding:10px; border-radius:8px; margin-bottom:16px;">
-            <option value="5">5 - Excellent</option>
-            <option value="4">4 - Good</option>
-            <option value="3">3 - Average</option>
-            <option value="2">2 - Needs improvement</option>
-            <option value="1">1 - Poor</option>
-        </select>
-        
-        <label style="display:block; margin-bottom:8px; font-weight:500;">Comment (optional)</label>
-        <textarea id="feedbackComment" placeholder="What can we improve?" style="width:100%; height:100px; padding:10px; border-radius:8px; resize:vertical; margin-bottom:16px;"></textarea>
-        
-        <div style="display:flex; gap:12px; justify-content:flex-end;">
-            <button id="feedbackCancelBtn" onclick="closeFeedbackModal()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:transparent; color:#0f172a; cursor:pointer;">Cancel</button>
-            <button onclick="submitAppFeedback()" style="padding:10px 20px; border:none; border-radius:8px; background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; font-weight:600; cursor:pointer;">Submit</button>
+        <div id="feedbackFormContainer">
+            <label style="display:block; margin-bottom:8px; font-weight:500;">Rating (1–5)</label>
+            <select id="feedbackRating" style="width:100%; padding:10px; border-radius:8px; margin-bottom:16px;">
+                <option value="5">5 - Excellent</option>
+                <option value="4">4 - Good</option>
+                <option value="3">3 - Average</option>
+                <option value="2">2 - Needs improvement</option>
+                <option value="1">1 - Poor</option>
+            </select>
+            
+            <label style="display:block; margin-bottom:8px; font-weight:500;">Comment (optional)</label>
+            <textarea id="feedbackComment" placeholder="What can we improve?" style="width:100%; height:100px; padding:10px; border-radius:8px; resize:vertical; margin-bottom:16px;"></textarea>
+            
+            <div style="display:flex; gap:12px; justify-content:flex-end;">
+                <button id="feedbackCancelBtn" onclick="closeFeedbackModal()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:transparent; color:#0f172a; cursor:pointer;">Cancel</button>
+                <button id="feedbackSubmitBtn" onclick="submitAppFeedback()" style="padding:10px 20px; border:none; border-radius:8px; background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; font-weight:600; cursor:pointer;">Submit</button>
+            </div>
         </div>
+        
+        <div id="feedbackStatus" style="display:none; margin-top:16px; padding:12px; border-radius:8px; text-align:center; font-weight:600;"></div>
     </div>
 </div>
 
@@ -3080,16 +3098,34 @@ async function sendHelpful(postId, isHelpful) {
 }
 
 function showFeedbackModal() {
+    // Reset the form
+    document.getElementById('feedbackRating').value = '5';
+    document.getElementById('feedbackComment').value = '';
+    document.getElementById('feedbackFormContainer').style.display = 'block';
+    document.getElementById('feedbackStatus').style.display = 'none';
+    document.getElementById('feedbackTitle').textContent = 'Your Feedback Matters';
     document.getElementById('feedbackModal').style.display = 'flex';
 }
 
 function closeFeedbackModal() {
     document.getElementById('feedbackModal').style.display = 'none';
+    // Reset the form for next time
+    document.getElementById('feedbackRating').value = '5';
+    document.getElementById('feedbackComment').value = '';
+    document.getElementById('feedbackFormContainer').style.display = 'block';
+    document.getElementById('feedbackStatus').style.display = 'none';
 }
 
 async function submitAppFeedback() {
     const rating = parseInt(document.getElementById('feedbackRating').value);
     const comment = document.getElementById('feedbackComment').value.trim();
+    const submitBtn = document.getElementById('feedbackSubmitBtn');
+    const cancelBtn = document.getElementById('feedbackCancelBtn');
+
+    // Disable buttons during submission
+    submitBtn.disabled = true;
+    cancelBtn.disabled = true;
+    submitBtn.style.opacity = '0.6';
 
     try {
         const res = await fetch('/feedback', {
@@ -3103,15 +3139,47 @@ async function submitAppFeedback() {
         });
         const data = await res.json().catch(() => ({}));
 
+        const statusDiv = document.getElementById('feedbackStatus');
+        const formContainer = document.getElementById('feedbackFormContainer');
+        const titleDiv = document.getElementById('feedbackTitle');
+
         if (res.ok && data.ok) {
-            setCommunityStatus(data.message || "Thank you! Your feedback has been sent.");
-            closeFeedbackModal();
-            document.getElementById('feedbackComment').value = '';
+            // Show success state
+            formContainer.style.display = 'none';
+            statusDiv.style.display = 'block';
+            titleDiv.textContent = 'Thank You!';
+            statusDiv.textContent = '✅ Your feedback is successfully submitted! Thank you for helping us improve.';
+            statusDiv.style.backgroundColor = '#dcfce7';
+            statusDiv.style.color = '#166534';
+            
+            // Auto-close after 2 seconds
+            setTimeout(() => {
+                closeFeedbackModal();
+            }, 2000);
         } else {
-            setCommunityStatus(data.message || "Failed to send feedback. Try again.", true);
+            // Show error state
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = '❌ ' + (data.message || 'Failed to send feedback. Please try again.');
+            statusDiv.style.backgroundColor = '#fee2e2';
+            statusDiv.style.color = '#991b1b';
+            
+            // Re-enable buttons on error
+            submitBtn.disabled = false;
+            cancelBtn.disabled = false;
+            submitBtn.style.opacity = '1';
         }
     } catch (err) {
-        setCommunityStatus("Network error. Please check connection.", true);
+        // Show error state
+        const statusDiv = document.getElementById('feedbackStatus');
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = '❌ Network error. Please check your connection and try again.';
+        statusDiv.style.backgroundColor = '#fee2e2';
+        statusDiv.style.color = '#991b1b';
+        
+        // Re-enable buttons on error
+        submitBtn.disabled = false;
+        cancelBtn.disabled = false;
+        submitBtn.style.opacity = '1';
     }
 }
 

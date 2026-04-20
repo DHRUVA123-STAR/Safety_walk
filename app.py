@@ -416,10 +416,10 @@ def resize_for_analysis(img, max_dim=ANALYZE_MAX_DIM):
 
 def yolo_conf_threshold(brightness):
     if brightness < 40:
-        return 0.25
+        return 0.20
     if brightness < 75:
-        return 0.30
-    return 0.35
+        return 0.25
+    return 0.30
 
 def detect_scene_yolo(img, brightness, allow_fast_empty=True, enable_full_pass=True):
     detector = get_yolo_detector()
@@ -457,7 +457,8 @@ def detect_scene_yolo(img, brightness, allow_fast_empty=True, enable_full_pass=T
         return vehicle_count, vehicles_by_type, people_count, crowd
 
     # Quick pass for empty-scene fast return.
-    quick_conf = min(0.55, max(0.35, conf + 0.10))
+    # Use lower confidence for quick pass to catch more objects
+    quick_conf = max(0.25, conf - 0.05)
     quick_results = detector.predict(
         source=img,
         conf=quick_conf,
@@ -1297,9 +1298,11 @@ def analyze_scene():
         lighting, brightness = detect_lighting(processed_img)
         detector_used = "fallback"
         try:
+            # Enable full detection pass for vehicle-focused, crowd-focused, and auto-sync modes
+            vehicle_focused_mode = mode == "vehicle"
             people_focused_mode = mode in {"crowd", "autosync", "mobile_detect"}
-            use_fast_empty = not people_focused_mode
-            enable_full_pass = people_focused_mode
+            use_fast_empty = not (vehicle_focused_mode or people_focused_mode)
+            enable_full_pass = vehicle_focused_mode or people_focused_mode
             vehicle_count, vehicles_by_type, people_count, crowd, yolo_mode = detect_scene_yolo(
                 processed_img, brightness, allow_fast_empty=use_fast_empty, enable_full_pass=enable_full_pass
             )
