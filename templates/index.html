@@ -3169,22 +3169,51 @@ async function submitAppFeedback() {
         if (res.ok && data.ok) {
             // Send email via EmailJS
             try {
-                await emailjs.send(
-                    "{{ EMAILJS_SERVICE_ID|default('your-emailjs-service-id') }}",
-                    "{{ EMAILJS_TEMPLATE_ID|default('your-emailjs-template-id') }}",
-                    {
-                        rating: rating,
-                        comment: comment,
-                        user_token: userToken,
-                        submitted_at: new Date().toISOString(),
-                        remote_ip: window.location.hostname,
-                        user_agent: navigator.userAgent,
-                        to_email: "{{ FEEDBACK_RECIPIENT_EMAIL|default('your-email@example.com') }}"
-                    }
-                );
-                console.log('Feedback email sent successfully via EmailJS');
+                const serviceId = "{{ EMAILJS_SERVICE_ID|default('') }}";
+                const templateId = "{{ EMAILJS_TEMPLATE_ID|default('') }}";
+                const publicKey = "{{ EMAILJS_PUBLIC_KEY|default('') }}";
+                const recipientEmail = "{{ FEEDBACK_RECIPIENT_EMAIL|default('') }}";
+
+                console.log('🔍 EmailJS Debug Info:');
+                console.log('Service ID:', serviceId);
+                console.log('Template ID:', templateId);
+                console.log('Public Key:', publicKey ? 'SET ✓' : 'MISSING ✗');
+                console.log('Recipient Email:', recipientEmail);
+
+                if (!serviceId || serviceId === '' || serviceId === 'your-emailjs-service-id') {
+                    console.error('❌ EmailJS Service ID not configured!');
+                    throw new Error('EmailJS Service ID missing. Check Railway variables.');
+                }
+                if (!templateId || templateId === '' || templateId === 'your-emailjs-template-id') {
+                    console.error('❌ EmailJS Template ID not configured!');
+                    throw new Error('EmailJS Template ID missing. Check Railway variables.');
+                }
+                if (!publicKey || publicKey === '' || publicKey === 'your-emailjs-public-key') {
+                    console.error('❌ EmailJS Public Key not configured!');
+                    throw new Error('EmailJS Public Key missing. Check Railway variables.');
+                }
+
+                console.log('📧 Attempting to send email via EmailJS...');
+                
+                const emailParams = {
+                    rating: rating,
+                    comment: comment,
+                    user_token: userToken,
+                    submitted_at: new Date().toISOString(),
+                    remote_ip: window.location.hostname,
+                    user_agent: navigator.userAgent,
+                    to_email: recipientEmail
+                };
+
+                console.log('📝 Email Parameters:', emailParams);
+
+                const response = await emailjs.send(serviceId, templateId, emailParams);
+                
+                console.log('✅ Email sent successfully!');
+                console.log('EmailJS Response:', response);
             } catch (emailError) {
-                console.warn('EmailJS failed, but feedback was saved:', emailError);
+                console.error('❌ EmailJS Error:', emailError);
+                console.error('Error Message:', emailError.message);
             }
 
             // Show success state
