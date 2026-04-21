@@ -26,6 +26,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging-compat.js"></script>
 
+    <!-- EmailJS for feedback emails -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
     <style>
         :root{
             --primary:#1966d2;
@@ -2157,6 +2160,9 @@ messaging.onMessage((payload) => {
   setCommunityStatus(`New Nearby Alert: ${payload.notification.title}`, false);
 });
 
+// Initialize EmailJS for feedback emails
+emailjs.init("{{ EMAILJS_PUBLIC_KEY|default('your-emailjs-public-key') }}");
+
 /* ==================== LANGUAGE SWITCH (NEW FEATURE) ==================== */
 const CURRENT_LANG_KEY = "voice_current_lang";
 let currentVoiceLang = localStorage.getItem(CURRENT_LANG_KEY) || "en";
@@ -3161,6 +3167,26 @@ async function submitAppFeedback() {
         const titleDiv = document.getElementById('feedbackTitle');
 
         if (res.ok && data.ok) {
+            // Send email via EmailJS
+            try {
+                await emailjs.send(
+                    "{{ EMAILJS_SERVICE_ID|default('your-emailjs-service-id') }}",
+                    "{{ EMAILJS_TEMPLATE_ID|default('your-emailjs-template-id') }}",
+                    {
+                        rating: rating,
+                        comment: comment,
+                        user_token: userToken,
+                        submitted_at: new Date().toISOString(),
+                        remote_ip: window.location.hostname,
+                        user_agent: navigator.userAgent,
+                        to_email: "{{ FEEDBACK_RECIPIENT_EMAIL|default('your-email@example.com') }}"
+                    }
+                );
+                console.log('Feedback email sent successfully via EmailJS');
+            } catch (emailError) {
+                console.warn('EmailJS failed, but feedback was saved:', emailError);
+            }
+
             // Show success state
             formContainer.style.display = 'none';
             statusDiv.style.display = 'block';

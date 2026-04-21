@@ -12,8 +12,6 @@ import threading
 import ssl
 import certifi
 import uuid
-import smtplib
-from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 import cloudinary
 import cloudinary.uploader
@@ -51,92 +49,8 @@ def load_local_env():
 
 load_local_env()
 
-# Feedback Gmail account
-# For Railway deploys, set these in Railway Variables.
-FEEDBACK_GMAIL_ADDRESS = os.getenv("FEEDBACK_GMAIL_ADDRESS", "").strip()
-FEEDBACK_GMAIL_APP_PASSWORD = os.getenv("FEEDBACK_GMAIL_APP_PASSWORD", "")
-
-def get_feedback_email_config_errors():
-    missing = []
-    if not FEEDBACK_GMAIL_ADDRESS:
-        missing.append("FEEDBACK_GMAIL_ADDRESS")
-    if not FEEDBACK_GMAIL_APP_PASSWORD:
-        missing.append("FEEDBACK_GMAIL_APP_PASSWORD")
-    return missing
-
-def send_feedback_email(feedback_record):
-    """Send feedback email with detailed logging"""
-    try:
-        missing = get_feedback_email_config_errors()
-        if missing:
-            app.logger.error(f"Gmail not configured. Missing: {', '.join(missing)}")
-            return False
-
-        app.logger.info(f"Attempting to send feedback email to {FEEDBACK_GMAIL_ADDRESS}")
-
-        message = EmailMessage()
-        message["Subject"] = (
-            f"Community Safety App Feedback - {feedback_record['rating']}/5"
-        )
-        message["From"] = FEEDBACK_GMAIL_ADDRESS
-        message["To"] = FEEDBACK_GMAIL_ADDRESS
-        message["Reply-To"] = FEEDBACK_GMAIL_ADDRESS
-
-        submitted_at = feedback_record["created_at"]
-        comment = feedback_record["comment"] or "(No comment provided)"
-        remote_ip = feedback_record.get("remote_ip") or "Unknown"
-        user_agent = feedback_record.get("user_agent") or "Unknown"
-        message.set_content(
-            "\n".join(
-                [
-                    "A new feedback submission was received.",
-                    "",
-                    f"Rating: {feedback_record['rating']}/5",
-                    f"Comment: {comment}",
-                    f"User Token: {feedback_record['user_token']}",
-                    f"Submitted At (UTC): {submitted_at}",
-                    f"Remote IP: {remote_ip}",
-                    f"User Agent: {user_agent}",
-                ]
-            )
-        )
-
-        app.logger.info("Connecting to Gmail SMTP...")
-        ssl_context = ssl.create_default_context(cafile=certifi.where())
-
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
-            app.logger.info("SMTP connection established")
-            smtp.ehlo()
-            app.logger.info("EHLO sent")
-
-            smtp.starttls(context=ssl_context)
-            app.logger.info("STARTTLS completed")
-
-            smtp.ehlo()
-            app.logger.info("Second EHLO sent")
-
-            app.logger.info(f"Attempting login for {FEEDBACK_GMAIL_ADDRESS}")
-            smtp.login(FEEDBACK_GMAIL_ADDRESS, FEEDBACK_GMAIL_APP_PASSWORD)
-            app.logger.info("Login successful")
-
-            smtp.send_message(message)
-            app.logger.info("Email sent successfully!")
-
-        return True
-    except smtplib.SMTPAuthenticationError as exc:
-        app.logger.error(f"Gmail authentication failed: {str(exc)}")
-        return False
-    except smtplib.SMTPConnectError as exc:
-        app.logger.error(f"Gmail connection failed: {str(exc)}")
-        return False
-    except Exception as exc:
-        app.logger.exception(f"Unexpected error sending feedback email: {str(exc)}")
-        return False
-
-
-def send_feedback_email_background(feedback_record):
-    thread = threading.Thread(target=send_feedback_email, args=(feedback_record,), daemon=True)
-    thread.start()
+# Feedback configuration (now using EmailJS on frontend)
+FEEDBACK_RECIPIENT_EMAIL = os.getenv("FEEDBACK_RECIPIENT_EMAIL", "your-email@example.com").strip()
 
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 PROTO_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
@@ -1091,7 +1005,11 @@ def home():
         score=score,
         safety_level=safety_level,
         reasons=reasons,
-        voice_trigger=voice_trigger
+        voice_trigger=voice_trigger,
+        EMAILJS_SERVICE_ID=os.getenv("EMAILJS_SERVICE_ID", ""),
+        EMAILJS_TEMPLATE_ID=os.getenv("EMAILJS_TEMPLATE_ID", ""),
+        EMAILJS_PUBLIC_KEY=os.getenv("EMAILJS_PUBLIC_KEY", ""),
+        FEEDBACK_RECIPIENT_EMAIL=FEEDBACK_RECIPIENT_EMAIL
     )
 
 @app.route("/detect-area", methods=["POST"])
@@ -1298,59 +1216,11 @@ def submit_app_feedback():
         app.logger.warning("Firestore DB not available - feedback not saved")
         return jsonify({"ok": False, "message": "Database error. Please try again."}), 503
 
-    # Send email synchronously first to test, then make background
-    email_sent = send_feedback_email(feedback_record)
-    if not email_sent:
-        app.logger.warning("Email sending failed, but feedback was saved")
-        return jsonify({
-            "ok": True,
-            "message": "✅ Your feedback is successfully submitted! (Note: Email notification failed to send)"
-        })
-
+    # Email will be sent via EmailJS on the frontend
     return jsonify({
         "ok": True,
-        "message": "✅ Your feedback is successfully submitted! An email notification has been sent."
+        "message": "✅ Your feedback is successfully submitted! An email notification will be sent."
     })
-
-@app.route("/test-gmail", methods=["GET"])
-def test_gmail_connection():
-    """Test Gmail SMTP connection and credentials"""
-    try:
-        missing = get_feedback_email_config_errors()
-        if missing:
-            return jsonify({
-                "ok": False,
-                "message": f"Gmail not configured. Missing: {', '.join(missing)}"
-            }), 503
-
-        app.logger.info("Testing Gmail connection...")
-
-        ssl_context = ssl.create_default_context(cafile=certifi.where())
-
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
-            smtp.ehlo()
-            smtp.starttls(context=ssl_context)
-            smtp.ehlo()
-            smtp.login(FEEDBACK_GMAIL_ADDRESS, FEEDBACK_GMAIL_APP_PASSWORD)
-
-        app.logger.info("Gmail test successful!")
-        return jsonify({
-            "ok": True,
-            "message": "✅ Gmail connection successful! Emails should work."
-        })
-
-    except smtplib.SMTPAuthenticationError as exc:
-        app.logger.error(f"Gmail auth failed: {str(exc)}")
-        return jsonify({
-            "ok": False,
-            "message": f"❌ Gmail authentication failed: {str(exc)}. Check your app password."
-        }), 500
-    except Exception as exc:
-        app.logger.exception(f"Gmail test failed: {str(exc)}")
-        return jsonify({
-            "ok": False,
-            "message": f"❌ Gmail connection failed: {str(exc)}"
-        }), 500
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
