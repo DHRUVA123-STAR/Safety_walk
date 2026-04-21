@@ -3201,11 +3201,11 @@ async function submitAppFeedback() {
                     user_token: userToken,
                     submitted_at: new Date().toISOString(),
                     remote_ip: window.location.hostname,
-                    user_agent: navigator.userAgent,
-                    to_email: recipientEmail
+                    user_agent: navigator.userAgent
                 };
 
                 console.log('📝 Email Parameters:', emailParams);
+                console.log('⚠️  Make sure your EmailJS template has "To Email" set to:', recipientEmail);
 
                 const response = await emailjs.send(serviceId, templateId, emailParams);
                 
